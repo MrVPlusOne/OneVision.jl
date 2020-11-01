@@ -4,9 +4,7 @@ using OneVision: @kwdef, Each, CentralControl, WorldDynamics
 using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate
 using Random
 using OneVision.NaiveCFs: NaiveCF
-using BenchmarkTools
 import OneVision
-
 
 # state indices
 const Pos, Velocity = 1, 2

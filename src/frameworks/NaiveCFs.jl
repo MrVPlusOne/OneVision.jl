@@ -1,6 +1,6 @@
 module NaiveCFs
 
-export NaiveCF, control!, make_controllers
+export NaiveCF, NaiveMsg, control!, make_controllers
 
 using OneVision
 using OneVision: State, Obs, Act, ℕ
