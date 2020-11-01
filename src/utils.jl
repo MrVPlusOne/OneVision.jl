@@ -1,4 +1,4 @@
-export @todo, @require_impl, constant_queue, col_vector
+export @todo, @require_impl, constant_queue, col_vector, unzip
 export @kwdef, Queue, enqueue!, dequeue!
 
 using DataStructures: Queue, enqueue!, dequeue!
@@ -24,9 +24,11 @@ function constant_queue(value::T, q_size)::Queue{T} where T
 end    
 
 "Convert a 2-D column vector to a 1-D vector.\n"
-col_vector(x::Matrix)::Vector = begin
+col_vector(x::AbstractMatrix) = begin
     @assert size(x, 2) == 1
     x[:]
 end
     
-col_vector(x::Vector) = x
+col_vector(x::AbstractVector) = x
+
+unzip(a) = map(x -> getfield.(a, x), fieldnames(eltype(a)))
