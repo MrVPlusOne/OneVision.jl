@@ -1,4 +1,4 @@
-export todo, require_impl, constant_queue, col_vector
+export @todo, @require_impl, constant_queue, col_vector
 export @kwdef, Queue, enqueue!, dequeue!
 
 using DataStructures: Queue, enqueue!, dequeue!

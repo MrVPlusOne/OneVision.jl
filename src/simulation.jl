@@ -1,7 +1,6 @@
-
 export simulate, SimulationResult, visualize
 
-using Plots
+using Plots: Plot, plot
 
 "Results are indexed by (time, agent)"
 @kwdef struct SimulationResult
@@ -18,7 +17,9 @@ end
 
 "A generic result visualization function that draws multiple line plots, 
 one for each component of the state vector.\n"
-visualize(result::SimulationResult, world::WorldDynamics; delta_t=nothing) = begin
+function visualize(
+    result::SimulationResult, world::WorldDynamics; delta_t=nothing
+)::Vector{Plot}
     if delta_t === nothing
         times = result.times
         xlabel = "time step"
@@ -27,10 +28,10 @@ visualize(result::SimulationResult, world::WorldDynamics; delta_t=nothing) = beg
         xlabel = "time (s)"
     end
     ## currently assume all agents have the same type of states and observations
-    for (x_id, x_name) in enumerate(state_names(world.dynamics[1]))
+    map(enumerate(state_names(world.dynamics[1]))) do (x_id, x_name)
         ys::Matrix{ℝ} = (x -> x[x_id]).(result.xs)
         labels = ["agent $i" for _ in 1:1, i in 1:size(ys, 2)]
-        display(plot(times, ys; title=x_name, label=labels, xlabel))
+        plot(times, ys; title=x_name, label=labels, xlabel)
     end
 end
 

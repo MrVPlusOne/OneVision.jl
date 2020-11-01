@@ -3,6 +3,7 @@ module NaiveCFs
 export NaiveCF, control!, make_controllers
 
 using OneVision
+using OneVision: State, Obs, Act, ℕ
 import OneVision: control!, make_controllers
 
 struct NaiveMsg

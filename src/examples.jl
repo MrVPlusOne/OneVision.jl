@@ -1,20 +1,22 @@
 module Car1DExample
-using OneVision
+using OneVision: ℝ, 𝕋, ℕ, ObsDynamics, State, Obs, Act
+using OneVision: @kwdef, Each, CentralControl, WorldDynamics
+using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate
 using Random
 using OneVision.NaiveCFs: NaiveCF
+using BenchmarkTools
 import OneVision
 
 
 # state indices
-
-Pos = 1; Velocity = 2;
+const Pos, Velocity = 1, 2
 # action indices
-Acc = 1;
+const Acc = 1
 # obs indices
-Detected = 1; Distance = 2;
+const Detected, Distance = 1, 2
 
-car_A = [0.0 1.0; 0.0 0.0]
-car_B = [0.0 1.0]'
+const car_A = [0.0 1.0; 0.0 0.0]
+const car_B = [0.0 1.0]'
 
 car_system(delta_t::ℝ, noise::Function) = 
     discretize(
@@ -55,7 +57,9 @@ OneVision.forward(dy::WallObsModel, x::State, z::Obs, t::𝕋)::Obs = z
     target_v::ℝ = 2.0
 end
 
-OneVision.control_one(lf::LeaderFollowerControl, xs::Each{State},zs::Each{Obs}, id::ℕ)::Act = begin
+OneVision.control_one(
+    lf::LeaderFollowerControl, xs::Each{State},zs::Each{Obs}, id::ℕ
+)::Act = begin
     # note that this controller does not stabilize the system; to do that, 
     # in addition to track a speed target point, we will need to track 
     # a position target as well.
@@ -92,7 +96,7 @@ function run_example(times, delta_t::ℝ)
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
     init_states = fill(([0.0,0.0], [0.0,0.0], [0.0]), N)
     delays = DelayModel(obs=1, act=2, com=5)
-    result = @time simulate(
+    result = simulate(
         world_dynamics, 
         delays,
         NaiveCF(N, LeaderFollowerControl(), delays.com),

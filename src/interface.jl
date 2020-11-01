@@ -101,9 +101,8 @@ function control!(
     @require_impl 
 end
 
-
-struct WorldDynamics
-num_agents::ℕ
+@kwdef struct WorldDynamics
+    num_agents::ℕ
     dynamics::Each{<:SysDynamics}
     obs_dynamics::Each{<:ObsDynamics}
 end
