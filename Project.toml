@@ -18,6 +18,7 @@ Plots = "1.7"
 Setfield = "0.7"
 QuadGK = "2.4"
 Reexport = "0.2"
+DataStructures = "0.18"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
