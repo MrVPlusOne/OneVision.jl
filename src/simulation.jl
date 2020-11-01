@@ -122,7 +122,8 @@ function simulate_impl(
         # record results
         if t == times[data_idx]
             data = recorder[2](xs, zs, us)
-            @assert size(data) == (N, length(recorder[1])) "The recorder should return a matrix of size (N * Num curves) "
+            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
+               * "return a matrix of size (N * Num curves), got size $(size(data))")
             result.values[data_idx, :, :] = data
             data_idx += 1
         end
