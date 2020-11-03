@@ -42,7 +42,7 @@ struct SysDynamicsLTI{X,U,MA,MB} <: SysDynamics{X,U}
 end
 
 function sys_forward(dy::SysDynamicsLTI{X,U,MA,MB}, x::X, u::U, t::𝕋)::X where {X,U,MA,MB}
-    (dy.A * x + dy.B * u + (dy.w(t)::X)) |> col_vector |> v -> convert(X, v)
+    (dy.A * x + dy.B * u + (dy.w(t)::X)) |> colvec2vec |> v -> convert(X, v)
 end
 
 state_names(dy::SysDynamicsLTI) = dy.state_names
