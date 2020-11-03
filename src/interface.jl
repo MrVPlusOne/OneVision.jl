@@ -1,6 +1,6 @@
 export ℝ, ℕ, 𝕋, Each
-export SysDynamics, SysDynamicsLTI, ObsDynamics, discretize
-export sys_forward# , state_names, act_names, obs_names
+export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, ObsDynamics, discretize
+export sys_forward, sys_A, sys_B, sys_w
 export DelayModel, WorldDynamics, CentralControl, control_one, control_all
 export Controller, control!
 export ControllerFramework, make_controllers, MsgQueue
@@ -18,23 +18,37 @@ Each{T} = Vector{T}
 
 """ A system dynamics with the state type `X` and action type `U`.
 """
-abstract type SysDynamics{X,U} end
+abstract type SysDynamics end
 
 "Simulate one time step forward using the system dynamics.\n"
-function sys_forward(dy::SysDynamics{X,U}, x::X, u::U, t::𝕋)::X where {X,U} @require_impl end
+function sys_forward(dy::SysDynamics, x, u, t::𝕋) @require_impl end
 
+"""
+A time-variant linear dynamics of the form ``x(t+1) = A(t) x(t) + B(t) u(t) + w(t)``.
+Should implement 3 methods: `sys_A`, `sys_B`, and `sys_w`.
+"""
+abstract type SysDynamicsLinear <: SysDynamics end
+
+function sys_A(sys::SysDynamicsLinear, t) @require_impl end
+function sys_B(sys::SysDynamicsLinear, t) @require_impl end
+function sys_w(sys::SysDynamicsLinear, t) @require_impl end
+
+"""
+Get the corresponding system matrices from a linear system.
+"""
+sys_A, sys_B, sys_w
 
 """
 An LTI Dynamics of the form ``x(t+1) = A x(t) + B u(t) + w(t)``.
 """
-struct SysDynamicsLTI{X,U,MA,MB} <: SysDynamics{X,U}
+struct SysDynamicsLTI{MA,MB} <: SysDynamicsLinear
     A::MA
     B::MB
     w::Function
 end
 
-function sys_forward(dy::SysDynamicsLTI{X,U,MA,MB}, x::X, u::U, t::𝕋)::X where {X,U,MA,MB}
-    (dy.A * x + dy.B * u + (dy.w(t)::X)) |> colvec2vec |> v -> convert(X, v)
+function sys_forward(dy::SysDynamicsLTI, x::X, u, t::𝕋)::X where {X}
+    (dy.A * x + dy.B * u + dy.w(t)) |> colvec2vec |> v -> convert(X, v)
 end
 
 """
@@ -43,15 +57,15 @@ discrete-time LTI system, given in the form (A′, B′).
 """
 function discretize(A::TA, B::TB, delta_t::ℝ)::Tuple{TA,TB} where {TA,TB}
     A_int, err = quadgk(t -> exp(A .* t), 0.0, delta_t)
-    println("discretization error: $err")
+    # println("discretization error: $err")
     A′ = exp(A .* delta_t)
     B′ = A_int * B
     A′, B′
 end
 
-abstract type ObsDynamics{X,Z} end
+abstract type ObsDynamics end
 
-function obs_forward(dy::ObsDynamics{X,Z}, x::X, z::Z, t::𝕋)::X where {X,Z} @require_impl end
+function obs_forward(dy::ObsDynamics, x::X, z, t::𝕋)::X where {X} @require_impl end
     
 
 @kwdef struct DelayModel
@@ -61,16 +75,16 @@ function obs_forward(dy::ObsDynamics{X,Z}, x::X, z::Z, t::𝕋)::X where {X,Z} @
 end
 
 "A centralized controller with no delays.\n"
-abstract type CentralControl{X,Z,U} end
+abstract type CentralControl end
 
 function control_one(
-    f::CentralControl{X,Z,U}, xs::Each{X}, zs::Each{Z}, id::ℕ
+    f::CentralControl, xs::Each{X}, zs::Each{Z}, id::ℕ
 )::U  where {X,Z,U} 
     @require_impl
 end
 
 function control_all(
-    f::CentralControl{X,Z,U}, xs::Each{X},zs::Each{Z}, ids::Vector{ℕ}
+    f::CentralControl, xs::Each{X},zs::Each{Z}, ids::Vector{ℕ}
 )::Each{U} where {X,Z,U}
     map(i -> f(xs, zs, i), ids)
 end
@@ -88,10 +102,10 @@ function control!(
     @require_impl 
 end
 
-@kwdef struct WorldDynamics{X,Z,U}
+@kwdef struct WorldDynamics
     num_agents::ℕ
-    dynamics::Each{<:SysDynamics{X,U}}
-    obs_dynamics::Each{<:ObsDynamics{X,Z}}
+    dynamics::Each{<:SysDynamics}
+    obs_dynamics::Each{<:ObsDynamics}
 end
 
 WorldDynamics(info::Each{<:Tuple{SysDynamics,ObsDynamics}}) = begin

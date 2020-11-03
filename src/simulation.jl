@@ -56,7 +56,7 @@ the result. The first element in this sequence should be the time of the given i
    `(num agents, length(components))`.
 """
 function simulate(
-    world_dynamics::WorldDynamics{X,Z,U},
+    world_dynamics::WorldDynamics,
     delay_model::DelayModel,
     framework::ControllerFramework{X,Z,U,Msg},
     init_status::Each{Tuple{X,Z,U}},
@@ -85,7 +85,7 @@ function simulate(
 end
 
 function simulate_impl(
-    world_dynamics::WorldDynamics{X,Z,U},
+    world_dynamics::WorldDynamics,
     agents::Each{AgentState{X,Z,U,Msg}},
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},

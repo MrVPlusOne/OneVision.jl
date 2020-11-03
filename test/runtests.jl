@@ -5,7 +5,6 @@ using OneVision
 using Test
 
 @testset "OneVision.jl" begin
-    # Write your tests here.
     @testset "Discretize a double integrator" begin
         A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
         dt = 1.23

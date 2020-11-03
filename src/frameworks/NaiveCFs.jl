@@ -13,13 +13,13 @@ end
 
 struct NaiveCF{X,Z,U} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z}}
     num_agents::ℕ
-    central::CentralControl{X,Z,U}
+    central::CentralControl
     msg_delay::ℕ
 end
 
 mutable struct NaiveController{X,Z,U} <: Controller{X,Z,U,NaiveMsg{X,Z}}
     self::ℕ
-    central::CentralControl{X,Z,U}
+    central::CentralControl
 end
 
 function control!(
@@ -40,7 +40,7 @@ function make_controllers(
     framework::NaiveCF{X,Z,U},
     init_status::Each{Tuple{X,Z,U}}
 )::Tuple{Each{NaiveController{X,Z,U}},Each{MsgQueue{NaiveMsg{X,Z}}}} where {X,Z,U}
-    ctrls = [NaiveController(i, framework.central) for i in 1:framework.num_agents]
+    ctrls = [NaiveController{X,Z,U}(i, framework.central) for i in 1:framework.num_agents]
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]
         constant_queue(receives, framework.msg_delay) 

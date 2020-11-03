@@ -26,14 +26,12 @@ Base.show(io::IO, ::Type{T_Z}) = show(io, "T_Z")
 
 function car_system(delta_t::ℝ, noise::Function)
     A′, B′ = discretize(car_A, car_B, delta_t)
-    SysDynamicsLTI{T_X,T_U,typeof(car_A),typeof(car_B)}(
-        A′, B′, noise,
-    )
+    SysDynamicsLTI(A′, B′, noise)
 end
     
-car_system(delta_t::ℝ) = car_system(delta_t, _ -> [0.0 0.0]')
+car_system(delta_t::ℝ) = car_system(delta_t, _ -> CarState(0.0, 0.0))
 
-@kwdef struct WallObsDynamics <: ObsDynamics{T_X,T_Z}
+@kwdef struct WallObsDynamics <: ObsDynamics
     wall_position::Union{ℝ,Nothing}
     detector_range::ℝ
 end
@@ -49,12 +47,12 @@ OneVision.obs_forward(dy::WallObsDynamics, x::T_X, z::T_Z, t::𝕋)::T_Z = begin
     end
 end
 
-struct WallObsModel <: ObsDynamics{T_X,T_Z} end
+struct WallObsModel <: ObsDynamics end
 
 "The model simply assumes the wall position stays the same\n"
 OneVision.obs_forward(dy::WallObsModel, x::T_X, z::T_Z, t::𝕋) = z
 
-@kwdef struct LeaderFollowerControl <: CentralControl{T_X,T_Z,T_U}
+@kwdef struct LeaderFollowerControl <: CentralControl
     k_v::ℝ = 3.0
     k_x::ℝ = 2.0
     stop_distance::ℝ = 3.0
@@ -108,7 +106,7 @@ function run_example(times, delta_t::ℝ)
     result = simulate(
         world_dynamics, 
         delays,
-        NaiveCF(N, LeaderFollowerControl(), delays.com),
+        NaiveCF{T_X,T_Z,T_U}(N, LeaderFollowerControl(), delays.com),
         init_states,
         (comps, record_f),
         times,
