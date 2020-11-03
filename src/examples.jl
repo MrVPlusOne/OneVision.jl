@@ -27,7 +27,7 @@ Base.show(io::IO, ::Type{T_Z}) = show(io, "T_Z")
 function car_system(delta_t::ℝ, noise::Function)
     A′, B′ = discretize(car_A, car_B, delta_t)
     SysDynamicsLTI{T_X,T_U,typeof(car_A),typeof(car_B)}(
-        A′, B′, noise, ["Pos", "Velocity"], ["Acc"]
+        A′, B′, noise,
     )
 end
     
@@ -37,9 +37,6 @@ car_system(delta_t::ℝ) = car_system(delta_t, _ -> [0.0 0.0]')
     wall_position::Union{ℝ,Nothing}
     detector_range::ℝ
 end
-
-OneVision.obs_names(::WallObsDynamics)::Vector{String} = 
-    ["Detected", "Distance"]
 
 OneVision.obs_forward(dy::WallObsDynamics, x::T_X, z::T_Z, t::𝕋)::T_Z = begin
     if Bool(z.detected)

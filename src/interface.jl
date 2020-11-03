@@ -1,6 +1,6 @@
 export ℝ, ℕ, 𝕋, Each
 export SysDynamics, SysDynamicsLTI, ObsDynamics, discretize
-export sys_forward, state_names, act_names, obs_names
+export sys_forward# , state_names, act_names, obs_names
 export DelayModel, WorldDynamics, CentralControl, control_one, control_all
 export Controller, control!
 export ControllerFramework, make_controllers, MsgQueue
@@ -23,30 +23,19 @@ abstract type SysDynamics{X,U} end
 "Simulate one time step forward using the system dynamics.\n"
 function sys_forward(dy::SysDynamics{X,U}, x::X, u::U, t::𝕋)::X where {X,U} @require_impl end
 
-state_names(::SysDynamics)::Vector{String} = @require_impl
-act_names(::SysDynamics)::Vector{String} = @require_impl
 
-struct TestType2{X}
-    x::X
-end
-
-    """
+"""
 An LTI Dynamics of the form ``x(t+1) = A x(t) + B u(t) + w(t)``.
 """
 struct SysDynamicsLTI{X,U,MA,MB} <: SysDynamics{X,U}
     A::MA
     B::MB
     w::Function
-    state_names::Vector{String}
-    act_names::Vector{String}
 end
 
 function sys_forward(dy::SysDynamicsLTI{X,U,MA,MB}, x::X, u::U, t::𝕋)::X where {X,U,MA,MB}
     (dy.A * x + dy.B * u + (dy.w(t)::X)) |> colvec2vec |> v -> convert(X, v)
 end
-
-state_names(dy::SysDynamicsLTI) = dy.state_names
-act_names(dy::SysDynamicsLTI) = dy.act_names
 
 """
 Converts a continous LTI system, given in the form of (A, B), into a 
@@ -64,7 +53,6 @@ abstract type ObsDynamics{X,Z} end
 
 function obs_forward(dy::ObsDynamics{X,Z}, x::X, z::Z, t::𝕋)::X where {X,Z} @require_impl end
     
-obs_names(::ObsDynamics)::Vector{String} = @require_impl
 
 @kwdef struct DelayModel
     obs::ℕ  # observation delay
