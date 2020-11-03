@@ -55,7 +55,7 @@ struct WallObsModel <: ObsDynamics{T_X,T_Z} end
 OneVision.obs_forward(dy::WallObsModel, x::T_X, z::T_Z, t::𝕋) = z
 
 @kwdef struct LeaderFollowerControl <: CentralControl{T_X,T_Z,T_U}
-    k_v::ℝ = 2.0
+    k_v::ℝ = 3.0
     k_x::ℝ = 2.0
     stop_distance::ℝ = 3.0
     target_v::ℝ = 2.0
