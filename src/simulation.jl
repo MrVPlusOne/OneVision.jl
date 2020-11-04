@@ -1,6 +1,8 @@
 export simulate, SimulationResult, visualize
 
 using Plots: Plot, plot
+using StaticArrays
+using Unrolled
 
 "Results are indexed by (time, agent, component)"
 @kwdef struct SimulationResult
@@ -56,13 +58,13 @@ the result. The first element in this sequence should be the time of the given i
    `(num agents, length(components))`.
 """
 function simulate(
-    world_dynamics::WorldDynamics,
+    world_dynamics::WorldDynamics{N},
     delay_model::DelayModel,
     framework::ControllerFramework{X,Z,U,Msg},
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},
     times::Vector{𝕋},
-)::SimulationResult where {X,Z,U,Msg}
+)::SimulationResult where {X,Z,U,Msg,N}
     (controllers, msg_qs) = make_controllers(framework, init_status)
     
     make_agent(id::ℕ)::AgentState = begin
@@ -77,31 +79,32 @@ function simulate(
     end
     simulate_impl(
         world_dynamics,
-        map(make_agent, 1:world_dynamics.num_agents),
-        init_status,
+        map(make_agent, SVector{N}(1:N)),
+        SVector{N}(init_status),
         recorder,
         times,
     )
 end
 
-function simulate_impl(
-    world_dynamics::WorldDynamics,
-    agents::Each{AgentState{X,Z,U,Msg}},
-    init_status::Each{Tuple{X,Z,U}},
-    recorder::Tuple{Vector{String},Function},
+@unroll function simulate_impl(
+    world_dynamics::WorldDynamics{N},
+    agents::SVector{N,AgentState{X,Z,U,Msg}},
+    init_status::SVector{N,Tuple{X,Z,U}},
+    recorder::Tuple{Vector{String},RF},
     times,
-) where {X,Z,U,Msg}
+) where {X,Z,U,Msg,RF,N}
     @assert !isempty(times)
-    N = world_dynamics.num_agents
     @assert length(agents) == N
+    Each = MVector{N}
 
-    xs, zs, us = unzip(init_status)
+    xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
     result = SimulationResult(times, N, recorder[1])
     data_idx = 1
     for t in times[1]:times[end]
         # observe, control, and send messages
-        transmition = Array{Msg}(undef, N, N)  # indexed by (receiver, sender)
-        for (i, a) in enumerate(agents)
+        transmition = MMatrix{N,N,Msg}(undef)  # indexed by (receiver, sender)
+        @unroll for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
+            a = agents[i]
             enqueue!(a.state_queue, xs[i])
             enqueue!(a.obs_queue, zs[i])
             x = dequeue!(a.state_queue)
@@ -112,7 +115,8 @@ function simulate_impl(
             transmition[:,i] = ms′
         end
         # receive messagees and update world states
-        for (i, a) in enumerate(agents)
+        @unroll for i in 1:length(agents)
+            a = agents[i]
             enqueue!(a.msg_queue, transmition[i,:])
             u = dequeue!(a.act_queue)
             us[i] = u

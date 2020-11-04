@@ -5,7 +5,7 @@ using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate
 using OneVision.NaiveCFs: NaiveCF
 using Random
 using LabelledArrays
-using StaticArrays
+using StaticArrays: @SMatrix
 
 import OneVision
 
@@ -62,9 +62,6 @@ end
 OneVision.control_one(
     lf::LeaderFollowerControl, xs::Each{T_X},zs::Each{T_Z}, id::ℕ
 )::T_U = begin
-    # note that this controller does not stabilize the system; to do that, 
-    # in addition to track a speed target point, we will need to track 
-    # a position target as well.
     x = xs[id]
     z = zs[id]
     if Bool(z.detected) && x.pos <= z.distance - lf.stop_distance

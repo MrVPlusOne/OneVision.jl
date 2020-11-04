@@ -41,14 +41,14 @@ sys_A, sys_B, sys_w
 """
 An LTI Dynamics of the form ``x(t+1) = A x(t) + B u(t) + w(t)``.
 """
-struct SysDynamicsLTI{MA,MB} <: SysDynamicsLinear
+struct SysDynamicsLTI{MA,MB,NF <: Function} <: SysDynamicsLinear
     A::MA
     B::MB
-    w::Function
+    w::NF
 end
-
+    
 function sys_forward(dy::SysDynamicsLTI, x::X, u, t::𝕋)::X where {X}
-    (dy.A * x + dy.B * u + dy.w(t)) |> colvec2vec |> v -> convert(X, v)
+    (dy.A * x + dy.B * u + (dy.w(t)::X))
 end
 
 """
@@ -102,15 +102,17 @@ function control!(
     @require_impl 
 end
 
-@kwdef struct WorldDynamics
-    num_agents::ℕ
-    dynamics::Each{<:SysDynamics}
-    obs_dynamics::Each{<:ObsDynamics}
+struct WorldDynamics{N,XDynamics <: Tuple,UDynamics <: Tuple}
+    dynamics::XDynamics
+    obs_dynamics::UDynamics
+
+    WorldDynamics(info::Each{<:Tuple{SysDynamics,ObsDynamics}}) = begin
+        ds = Tuple(first.(info))
+        os = Tuple(last.(info))
+        new{length(info),typeof(ds),typeof(os)}(ds, os)
+    end
 end
 
-WorldDynamics(info::Each{<:Tuple{SysDynamics,ObsDynamics}}) = begin
-    WorldDynamics(length(info), first.(info), last.(info))
-end
 
 MsgQueue{Msg} = Queue{Each{Msg}}
 
