@@ -8,48 +8,54 @@ using OSQP
 using MathOptInterface: AbstractOptimizer
 using Random, LinearAlgebra
 using StaticArrays
+import MutableArithmetics
 
-const SVec = StaticVector
-const SMat = StaticMatrix
-
-struct PathFollowingProblem{n_x,n_u,H}
-    dy::SysDynamicsLinear
-    x_weights::StaticVector{n_x}
-    u_weights::StaticVector{n_u}
-    optimizer::AbstractOptimizer
+struct PathFollowingProblem{n_x,n_u,H,Dy <: SysDynamicsLinear}
+    dy::Dy
+    x_weights::StaticVector{n_x,ℝ}
+    u_weights::StaticVector{n_u,ℝ}
+    make_optimizer
 end
 
+function MutableArithmetics.undef_array(::Type{Array{T,N}}, ::StaticArrays.SOneTo{M}) where {T,N,M}
+    return Array{T,N}(undef, M)
+end
+
+"""
+Returns `(u⋆, x⋆, objective_value)`.
+"""
 function follow_path(
     p::PathFollowingProblem{n_x,n_u,H}, 
-    x0::SVec{n_x},
-    x_path::SMat{n_x,H}, 
-    u_path::SMat{n_u,H},
+    x0::SVector{n_x},
+    x_path::SMatrix{n_x,H}, 
+    u_path::SMatrix{n_u,H},
     τ::𝕋
-) where {n_x,n_u,H}
-    model = Model(p.optimizer)
+)::Tuple where {n_x,n_u,H}
+    model = Model(p.make_optimizer)
     @variables model begin
-        x[1:n_x, τ:τ + H]
-        u[1:n_u, τ:τ + H - 1]
+        x[1:n_x, 1:H + 1]
+        u[1:n_u, 1:H]
     end
 
     # initial conditions
-    @constraint model x[:,τ] .== x0
+    @constraint model x[:,1] .== x0
     
-    A(t) = convert(SMat{n_x,n_x}, sys_A(p.dy, t))
-    B(t) = convert(SMat{n_x,n_u}, sys_B(p.dy, t))
-    w(t) = convert(SMat{n_x,1}, sys_w(p.dy, t))
+    A(t)::SMatrix{n_x,n_x,ℝ} = sys_A(p.dy, τ + t - 1)
+    B(t)::SMatrix{n_x,n_u,ℝ} = sys_B(p.dy, τ + t - 1)
+    w(t)::SMatrix{n_x,1,ℝ} = sys_w(p.dy,  τ + t - 1)
+    
     # dynamics constraints
-    @constraint(model, dy_cons[t=τ:τ + H - 1], 
-        A(t) * x[:,t] + B(t) * u[:,t] + w(t) == x[:,t + 1]
+    @constraint(model, [t = 1:H], 
+        A(t) * x[:,t] .+ B(t) * u[:,t] .+ w(t) .== x[:,t + 1]
     )
 
     @objective(model, Min, 
-        sum((x - x_path).^2 .* p.x_weights) + sum((u - u_path).^2 * p.u_weights)
+        sum((x[:,2:end] - x_path).^2 .* p.x_weights) + sum((u - u_path).^2 .* p.u_weights)
     )
 
     optimize!(model)
     
-    value(u), value(x), objective_value(model)
+    value.(u), value.(x[:, 1:H]), objective_value(model)
 end
 
 end # module
