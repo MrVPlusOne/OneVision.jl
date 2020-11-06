@@ -78,7 +78,7 @@ OneVision.control_one(
     [acc]
 end
 
-function run_example(times, delta_t::ℝ)
+function run_example(times, delta_t::ℝ; plot_result=true)
     times::Vector{𝕋} = collect(times)
     t0, t_end = times[1], times[end]
     rng = MersenneTwister(1234)
@@ -108,7 +108,7 @@ function run_example(times, delta_t::ℝ)
         (comps, record_f),
         times,
     )
-    visualize(result; delta_t)
+    plot_result ? visualize(result; delta_t) : result
 end
 
 end # Car1DExampleLabeled

@@ -31,6 +31,8 @@ function follow_path(
     u_path::SMatrix{n_u,H},
     τ::𝕋
 )::Tuple where {n_x,n_u,H}
+    local x, u, Min
+
     model = Model(p.make_optimizer)
     @variables model begin
         x[1:n_x, 1:H + 1]
