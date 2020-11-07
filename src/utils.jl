@@ -15,6 +15,20 @@ macro require_impl()
     :(error("Abstract method requires implementation."))
 end
 
+"""
+A typed function with annotated input and output type. 
+If `a` has type `FuncT{X,Y,F}`, then `a(x)` is equivalent to `a.f(x::X)::Y`.
+"""
+struct FuncT{X, Y, F} <: Function
+    f::F
+
+    FuncT(::Type{X}, ::Type{Y}, f::F) where {X, Y, F} = new{X, Y, F}(f)
+end
+
+@inline function (f::FuncT{X,Y})(x::X)::Y where {X, Y}
+    f.f(x)
+end
+
 function constant_queue(value::T, q_size)::Queue{T} where T
     q = Queue{T}()
     for _ in 1:q_size

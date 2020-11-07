@@ -1,7 +1,11 @@
-include("OneVision.jl")
-using .OneVision
-using .OneVision.Car1DExample: run_example
+if false  # hack to make vscode linter work properly 
+    include("OneVision.jl")
+    using .OneVision
+    using .OneVision.Car1DExample: run_example
+end
 
+using OneVision
+using OneVision.Car1DExample: run_example
 using BenchmarkTools: @benchmark 
 using Plots
 

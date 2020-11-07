@@ -22,7 +22,12 @@ function MutableArithmetics.undef_array(::Type{Array{T,N}}, ::StaticArrays.SOneT
 end
 
 """
-Returns `(u⋆, x⋆, objective_value)`.
+Returns `(u⋆[t in τ: τ+H-1], x⋆[t in τ+1: τ+H], objective_value)`.
+
+# Arguments
+ - `x0[τ]`: state at time τ
+ - `x_path[t in τ+1: τ+H]`: state trajectory ∈ [τ+1, τ+H]
+ - `u_path[t in τ: τ+H-1]`: action trajectory ∈ [τ, τ+H-1]
 """
 function follow_path(
     p::PathFollowingProblem{n_x,n_u,H}, 
