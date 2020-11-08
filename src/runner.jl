@@ -1,17 +1,19 @@
-if false  # hack to make vscode linter work properly 
+if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
     include("OneVision.jl")
     using .OneVision
     using .OneVision.Car1DExample: run_example
+else
+    using OneVision
+    using OneVision.Car1DExample: run_example
 end
 
-using OneVision
-using OneVision.Car1DExample: run_example
-using BenchmarkTools: @benchmark 
+using BenchmarkTools: @benchmark
 using Plots
+
 
 function run_and_plot()
     @time plts = run_example(1:20 * 20, 1.0 / 20)
-    
+
     width = 500
     height = 300
     n = length(plts)

@@ -1,4 +1,6 @@
 module Car1DExample
+export CarX, CarZ, CarU, car_system, WallObsDynamics
+
 using OneVision: ℝ, 𝕋, ℕ, ObsDynamics
 using OneVision: @kwdef, Each, CentralControl, WorldDynamics
 using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate

@@ -11,6 +11,7 @@ using StaticArrays
 import MutableArithmetics
 
 struct PathFollowingProblem{n_x,n_u,H,Dy <: SysDynamicsLinear}
+    horizon::Val{H}
     dy::Dy
     x_weights::StaticVector{n_x,ℝ}
     u_weights::StaticVector{n_u,ℝ}

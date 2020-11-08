@@ -7,7 +7,9 @@ for p in pkg_list
 end
 
 using LinearAlgebra
+using JuMP, OSQP
 @elapsed let
+    local x, Min
     ℝ = Float64
     model = Model(OSQP.Optimizer)
     n_x = 4
@@ -37,5 +39,7 @@ using LinearAlgebra
     
     value.(x[:, 1:H]), objective_value(model)
 end
+
+using Plots
 @elapsed (p = plot(rand(5), rand(5)); display(p))
 @elapsed @MArray [1 5;6 3]

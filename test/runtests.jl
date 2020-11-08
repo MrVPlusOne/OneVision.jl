@@ -1,55 +1,88 @@
 module TestOneVision
 
-# include("../src/OneVision.jl")
-using OneVision
-using OneVision.PathFollowing
+if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
+    # include("../src/OneVision.jl")
+    using .OneVision
+    using .OneVision.PathFollowing
+    using .OneVision.Car1DExample
+else
+    using OneVision
+    using OneVision.PathFollowing
+    using OneVision.Car1DExample
+end
+
 using StaticArrays
 using OSQP
 using Plots
 using Test
+using Statistics: mean
 
-struct DoubleIntegrator <: SysDynamicsLinear end
-
-const A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
 @testset "Discretize a double integrator" begin
+    A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
     let dt = 1.23
         @show A′, B′ = discretize(A, B, dt)
-        x0 = 1.1; v0 = 1.4; a = 1.45
-        x1, v1 =  A′ * [x0 v0]' + B′ * [a]'
+        x0 = 1.1
+        v0 = 1.4
+        a = 1.45
+        x1, v1 = A′ * [x0 v0]' + B′ * [a]'
         @test x1 == x0 + v0 * dt + a * dt * dt / 2
         @test v1 == v0 + a * dt
     end
 end
 
+let
+    dt = 0.1
+    H = 20  # horizon
+    sys = car_system(dt)
 
-@testset "Double integrator path tracking" begin 
-    let dt = 0.1
-        H = 20  # horizon
-        SA, SB = discretize(SMatrix{2,2}(A), SMatrix{2,1}(B), dt)
-        Sw = @SVector [0.0,0.0]
-        function OneVision.sys_A(::DoubleIntegrator, t) SA end
-        function OneVision.sys_B(::DoubleIntegrator, t) SB end
-        function OneVision.sys_w(::DoubleIntegrator, t) Sw end
-        x_weights = @SVector [5.0,2.0]
+    @testset "Path tracking test" begin
+        x_weights = @SVector [5.0, 2.0]
         u_weights = @SVector [0.1]
 
-        prob = PathFollowingProblem{2,1,H,DoubleIntegrator}(
-            DoubleIntegrator(), x_weights, u_weights, OSQP.Optimizer
+        prob = PathFollowingProblem(
+            Val(H),
+            sys,
+            x_weights,
+            u_weights,
+            OSQP.Optimizer,
         )
-        x0 = @SVector [-1.0, -1.0]
-        
+        x0 = SVector(CarX(-1.0, -1.0))
+
         # x_path = SMatrix{2,H}(hcat(zeros(2, H ÷ 2), fill([1;0], H ÷ 2)...))
-        x_path = SMatrix{2,H}(hcat(fill([1;0], H)...))
-        u_path = SMatrix{1,H}(zeros(1, H))
+        x_path = SMatrix{2,H}(hcat(fill(CarX(1, 0), H)...))
+        u_path = SMatrix{1,H}(hcat(fill(CarU(0), H)...))
         u, x, obj = follow_path(prob, x0, x_path, u_path, 0)
         times = (1:H) * dt
         plot(
             plot(times, u'; label="u"),
             plot(times, hcat(x', x_path'); label=["x" "v" "x*" "v*"]),
             layout=(2, 1),
-            size=(500, 300 * 3)
+            size=(500, 300 * 3),
         ) |> display
     end
-end
+
+    struct NoObs <: ObsDynamics end
+    OneVision.obs_forward(::NoObs, x, z, t::𝕋) = z
+
+    struct RendezvousControl <: CentralControl{CarU} end
+
+    OneVision.control_one(::RendezvousControl, xs, zs, t::𝕋, id::ℕ) = begin
+        target = mean(xs)
+        CarU(sum(target - xs[id]))
+    end
+
+    @testset "Forward prediciton" begin
+        N = 2
+        world = WorldDynamics(fill((sys, NoObs()), 2))
+        prob = ForwardPredictProblem(Val(H), world, RendezvousControl())
+        δx = @MMatrix fill(CarX(0.0, 0.0), H, N)
+        δz = @MMatrix fill(CarZ(0.0, 0.0), H, N)
+        s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
+        s2 = (CarX(2.0, 1.0), CarZ(0.0, 0.0))
+        u_traj, x_traj = forward_predict(prob, δx, δz, [s1,s2], 0)
+        y_data = hcat(x_traj[:,1]...)'
+        plot(1:H, y_data; label=["x1", "v1"]) |> display
+    end
+end # Double integrater let
 
 end # module
