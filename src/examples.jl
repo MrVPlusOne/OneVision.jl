@@ -4,39 +4,42 @@ using OneVision: @kwdef, Each, CentralControl, WorldDynamics
 using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate
 using OneVision.NaiveCFs: NaiveCF
 using Random
-using LabelledArrays
-using StaticArrays: @SMatrix
+using StaticArrays
 
 import OneVision
 
-const CarState = @SLVector ℝ (:pos, :velocity)
-const CarAct = @SLVector ℝ (:acc,)
-const CarObs = @SLVector ℝ (:detected, :distance)
+struct CarX <: FieldVector{2,ℝ}
+    pos::ℝ
+    velocity::ℝ
+end
+
+struct CarU <: FieldVector{1,ℝ}
+    acc::ℝ
+end
+
+struct CarZ <: FieldVector{2,ℝ}
+    detected::ℝ
+    distance::ℝ
+end
+
 
 const car_A = @SMatrix [0.0 1.0; 0.0 0.0]
 const car_B = @SMatrix [0.0; 1.0]
 
-const T_X = typeof(CarState(0.0, 0.0))
-const T_U = typeof(CarAct(0.0))
-const T_Z = typeof(CarObs(0.0, 0.0))
-
-Base.show(io::IO, ::Type{T_X}) = show(io, "T_X")
-Base.show(io::IO, ::Type{T_U}) = show(io, "T_U")
-Base.show(io::IO, ::Type{T_Z}) = show(io, "T_Z")
 
 function car_system(delta_t::ℝ, noise::Function)
     A′, B′ = discretize(car_A, car_B, delta_t)
     SysDynamicsLTI(A′, B′, noise)
 end
     
-car_system(delta_t::ℝ) = car_system(delta_t, _ -> CarState(0.0, 0.0))
+car_system(delta_t::ℝ) = car_system(delta_t, _ -> CarX(0.0, 0.0))
 
 @kwdef struct WallObsDynamics <: ObsDynamics
     wall_position::Union{ℝ,Nothing}
     detector_range::ℝ
 end
 
-OneVision.obs_forward(dy::WallObsDynamics, x::T_X, z::T_Z, t::𝕋)::T_Z = begin
+OneVision.obs_forward(dy::WallObsDynamics, x::CarX, z::CarZ, t::𝕋)::CarZ = begin
     if Bool(z.detected)
         z
     elseif (isnothing(dy.wall_position) 
@@ -50,9 +53,9 @@ end
 struct WallObsModel <: ObsDynamics end
 
 "The model simply assumes the wall position stays the same\n"
-OneVision.obs_forward(dy::WallObsModel, x::T_X, z::T_Z, t::𝕋) = z
+OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 
-@kwdef struct LeaderFollowerControl <: CentralControl
+@kwdef struct LeaderFollowerControl <: CentralControl{CarU}
     k_v::ℝ = 3.0
     k_x::ℝ = 2.0
     stop_distance::ℝ = 3.0
@@ -60,8 +63,8 @@ OneVision.obs_forward(dy::WallObsModel, x::T_X, z::T_Z, t::𝕋) = z
 end
 
 OneVision.control_one(
-    lf::LeaderFollowerControl, xs::Each{T_X},zs::Each{T_Z}, id::ℕ
-)::T_U = begin
+    lf::LeaderFollowerControl, xs::Each{CarX},zs::Each{CarZ}, id::ℕ
+)::CarU = begin
     x = xs[id]
     z = zs[id]
     if Bool(z.detected) && x.pos <= z.distance - lf.stop_distance
@@ -75,7 +78,7 @@ OneVision.control_one(
         acc = (lf.k_v * (leader.velocity - x.velocity) 
                + lf.k_x * (leader.pos - x.pos))
     end
-    [acc]
+    CarU(acc)
 end
 
 function run_example(times, delta_t::ℝ; plot_result=true)
@@ -85,7 +88,7 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     agent_info(id) = begin
         # acc_noise = randn(rng, ℝ, 1 + t_end - t0)
         acc_noise = zeros(1 + t_end - t0)
-        sys_dy = car_system(delta_t, t -> CarState(0, acc_noise[1 + t - t0]))
+        sys_dy = car_system(delta_t, t -> CarX(0, acc_noise[1 + t - t0]))
         obs_dy = (id == 1 ? WallObsDynamics(wall_position=10.0, detector_range=6.0) 
                 : WallObsModel())
         sys_dy, obs_dy
@@ -93,7 +96,7 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     
     N = 2
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
-    init_states = fill((CarState(0.0, 0.0), CarObs(0.0, 0.0), CarAct(0.0)), N)
+    init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
     delays = DelayModel(obs=1, act=2, com=5)
     comps = ["pos", "velocity", "acceleration"]
     function record_f(xs, zs, us)
@@ -103,7 +106,7 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     result = simulate(
         world_dynamics, 
         delays,
-        NaiveCF{T_X,T_Z,T_U}(N, LeaderFollowerControl(), delays.com),
+        NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
         init_states,
         (comps, record_f),
         times,
