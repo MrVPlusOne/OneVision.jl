@@ -1,10 +1,9 @@
 module Car1DExample
 export CarX, CarZ, CarU, car_system, WallObsDynamics
 
-using OneVision: ℝ, 𝕋, ℕ, ObsDynamics
-using OneVision: @kwdef, Each, CentralControl, WorldDynamics
-using OneVision: SysDynamicsLTI, discretize, DelayModel, visualize, simulate
-using OneVision.NaiveCFs: NaiveCF
+using OneVision
+using OneVision: ℝ, 𝕋, ℕ
+using OneVision: @kwdef
 using Random
 using StaticArrays
 
@@ -65,7 +64,7 @@ OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 end
 
 OneVision.control_one(
-    lf::LeaderFollowerControl, xs::Each{CarX},zs::Each{CarZ}, id::ℕ
+    lf::LeaderFollowerControl, xs::Each{CarX},zs::Each{CarZ}, t::𝕋, id::ℕ
 )::CarU = begin
     x = xs[id]
     z = zs[id]
@@ -100,6 +99,9 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
     init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
     delays = DelayModel(obs=1, act=2, com=5)
+    world_model = WorldDynamics(
+        fill((car_system(delta_t), WallObsModel()), N))
+
     comps = ["pos", "velocity", "acceleration"]
     function record_f(xs, zs, us)
         [(x -> x.pos).(xs) (x -> x.velocity).(xs) (u -> u.acc).(us)]
@@ -109,6 +111,7 @@ function run_example(times, delta_t::ℝ; plot_result=true)
         world_dynamics, 
         delays,
         NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
+        # OvCF{N, CarX, CarZ, CarU}(LeaderFollowerControl(), world_model, delays),
         init_states,
         (comps, record_f),
         times,

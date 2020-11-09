@@ -1,6 +1,7 @@
 export @todo, @require_impl, constant_queue, colvec2vec, colvec, @unzip
 export @kwdef, Queue, enqueue!, dequeue!
 
+import DataStructures
 using DataStructures: Queue, enqueue!, dequeue!
 using Base: @kwdef
 using Setfield: @set
@@ -19,35 +20,39 @@ end
 A typed function with annotated input and output type. 
 If `a` has type `FuncT{X,Y,F}`, then `a(x)` is equivalent to `a.f(x::X)::Y`.
 """
-struct FuncT{X, Y, F} <: Function
+struct FuncT{X,Y,F} <: Function
     f::F
 
-    FuncT(::Type{X}, ::Type{Y}, f::F) where {X, Y, F} = new{X, Y, F}(f)
+    FuncT(::Type{X}, ::Type{Y}, f::F) where {X,Y,F} = new{X,Y,F}(f)
 end
 
-@inline function (f::FuncT{X,Y})(x::X)::Y where {X, Y}
+@inline function (f::FuncT{X,Y})(x::X)::Y where {X,Y}
     f.f(x)
 end
 
-function constant_queue(value::T, q_size)::Queue{T} where T
+function DataStructures.Queue(xs::AbstractVector{T})::Queue{T} where T
     q = Queue{T}()
-    for _ in 1:q_size
-        enqueue!(q, value)
+    foreach(xs) do x
+        enqueue!(q, x)
     end
     q
-end    
+end
+
+function constant_queue(value::T, q_size)::Queue{T} where {T}
+    Queue(repeat([value], q_size))
+end
 
 "Convert a 2-D column vector to a 1-D vector.\n"
 colvec2vec(x::AbstractMatrix) = begin
     @assert size(x, 2) == 1
     reshape(x, :)
 end
-    
+
 colvec2vec(x::AbstractVector) = x
 
 """
 Make a 2-D column vector from a vector.
-""" 
+"""
 colvec(x::AbstractVector) = reshape(x, :, 1)
 
 """

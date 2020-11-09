@@ -1,12 +1,11 @@
 pkg_list = [
     :BenchmarkTools,
-    :LabelledArrays,
+    :StaticArrays,
     :JuMP,
     :OSQP,
     :MutableArithmetics,
     :Plots,
     :QuadGK,
-    :StaticArrays,
     :Unrolled,
     :Setfield,
 ]

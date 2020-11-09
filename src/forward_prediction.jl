@@ -1,6 +1,6 @@
 using StaticArrays
 
-export ForwardPredictProblem, forward_predict
+export ForwardPredictProblem, forward_predict, self_estimate
 
 struct ForwardPredictProblem{N,H,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}}
     horizon::Val{H}
@@ -10,7 +10,7 @@ end
 
 
 """
-Forward-predict the ideal fleet trajectory. 
+Forward-predict the ideal fleet trajectory.
 Returns `(ũ[t in τ: τ+H-1], x̃[t in τ+1: τ+H])`
 
 # Argument Details
@@ -42,4 +42,19 @@ function forward_predict(
         x_traj[t,:] = xs
     end
     u_traj, x_traj
+end
+
+"""
+Estimate the current state from an old state and the actuation history since then.
+"""
+function self_estimate(
+    self_dynamics::SysDynamics,
+    s0::Tuple{X,𝕋},
+    u_history,
+)::X where {X}
+    x, τ = s0
+    for (t, u) in enumerate(u_history)
+        x = sys_forward(self_dynamics, x, u, τ+t-1)
+    end
+    x
 end

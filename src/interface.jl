@@ -59,11 +59,6 @@ function sys_forward(dy::SysDynamicsLTI, x::X, u, t::𝕋)::X where {X}
     (dy.A * x + dy.B * u + (dy.w(t)::X))
 end
 
-struct Foo
-    x::Int 
-end
-new_f() = @info "Hi Or not hi?"
-
 """
 Converts a continous LTI system, given in the form of (A, B), into a
 discrete-time LTI system, given in the form (A′, B′).
@@ -95,7 +90,7 @@ function obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where {Z} @require_im
 end
 
 """
-A centralized controller with no delays.
+A centralized controller with actuation type `U` and no delays.
 
 Should implement `control_one`.
 """
@@ -142,9 +137,13 @@ MsgQueue{Msg} = Queue{Each{Msg}}
 
 abstract type ControllerFramework{X,Z,U,Msg} end
 
+"""
+Returns a tuple of `(controllers, message queues)`
+"""
 function make_controllers(
     framework::ControllerFramework{X,Z,U,Msg},
     init_status::Each{Tuple{X,Z,U}},
-)::Tuple{Each{Controller{X,Z,U,Msg}},Each{MsgQueue{Msg}}} where {X,Z,U,Msg}
+    init_t::𝕋,
+) where {X,Z,U,Msg}
     @require_impl
 end

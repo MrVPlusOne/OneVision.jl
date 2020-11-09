@@ -3,11 +3,9 @@ module TestOneVision
 if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
     # include("../src/OneVision.jl")
     using .OneVision
-    using .OneVision.PathFollowing
     using .OneVision.Car1DExample
 else
     using OneVision
-    using OneVision.PathFollowing
     using OneVision.Car1DExample
 end
 
@@ -82,6 +80,15 @@ let
         u_traj, x_traj = forward_predict(prob, δx, δz, [s1,s2], 0)
         y_data = hcat(x_traj[:,1]...)'
         plot(1:H, y_data; label=["x1", "v1"]) |> display
+    end
+
+    @testset "Self estimation" begin
+        s0 = CarX(0, 0), 0
+        xs = map(1:10) do D
+            u_history = [CarU(0.1i) for i in 1:D]
+            self_estimate(sys, s0, u_history)
+        end
+        plot(1:10, hcat(xs...)'; label=["x" "v"]) |> display
     end
 end # Double integrater let
 

@@ -65,7 +65,7 @@ function simulate(
     recorder::Tuple{Vector{String},Function},
     times::Vector{𝕋},
 )::SimulationResult where {X,Z,U,Msg,N}
-    (controllers, msg_qs) = make_controllers(framework, init_status)
+    (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
     
     make_agent(id::ℕ)::AgentState = begin
         (x₀, z₀, u₀) = init_status[id]

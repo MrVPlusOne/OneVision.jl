@@ -1,10 +1,4 @@
-module NaiveCFs
-
-export NaiveCF, NaiveMsg, control!, make_controllers
-
-using OneVision
-using OneVision: ℕ
-import OneVision: control!, make_controllers
+export NaiveMsg, NaiveCF, NaiveController
 
 struct NaiveMsg{X,Z}
     x::X
@@ -20,6 +14,7 @@ end
 mutable struct NaiveController{X,Z,U} <: Controller{X,Z,U,NaiveMsg{X,Z}}
     self::ℕ
     central::CentralControl
+    t::𝕋
 end
 
 function control!(
@@ -27,27 +22,28 @@ function control!(
     x::X,
     z::Z,
     msgs::Each{NaiveMsg{X,Z}},
-)::Tuple{U,Each{NaiveMsg}} where {X,Z,U}
+)::Tuple{U,Each{NaiveMsg{X,Z}}} where {X,Z,U}
     msgs[ctrl.self] = NaiveMsg(x, z)
     xs = [m.x for m in msgs]
-    os = [m.z for m in msgs]
-    u = control_one(ctrl.central, xs, os, ctrl.self)
+    zs = [m.z for m in msgs]
+    ctrl.t += 1
+    u = control_one(ctrl.central, xs, zs, ctrl.t, ctrl.self)
     msgs′ = fill(NaiveMsg(x, z), length(msgs))
     u, msgs′
 end
 
 function make_controllers(
     framework::NaiveCF{X,Z,U},
-    init_status::Each{Tuple{X,Z,U}}
-)::Tuple{Each{NaiveController{X,Z,U}},Each{MsgQueue{NaiveMsg{X,Z}}}} where {X,Z,U}
-    ctrls = [NaiveController{X,Z,U}(i, framework.central) for i in 1:framework.num_agents]
+    init_status::Each{Tuple{X,Z,U}},
+    init_t::𝕋,
+) where {X,Z,U}
+    ctrls = ntuple(framework.num_agents) do i
+        NaiveController{X,Z,U}(i, framework.central, init_t)
+    end
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]
-        constant_queue(receives, framework.msg_delay) 
+        constant_queue(receives, framework.msg_delay)
     end
-    msgs = [init_msg() for _ in init_status]
+    msgs = ntuple(_ -> init_msg(), framework.num_agents)
     ctrls, msgs
 end
-
-
-end # NaiveCFs
