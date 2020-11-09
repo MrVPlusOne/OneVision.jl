@@ -2,8 +2,7 @@ module Car1DExample
 export CarX, CarZ, CarU, car_system, WallObsDynamics
 
 using OneVision
-using OneVision: ℝ, 𝕋, ℕ
-using OneVision: @kwdef
+using OneVision: ℝ, 𝕋, ℕ, @kwdef
 using Random
 using StaticArrays
 
@@ -110,8 +109,8 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     result = simulate(
         world_dynamics, 
         delays,
-        NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
-        # OvCF{N, CarX, CarZ, CarU}(LeaderFollowerControl(), world_model, delays),
+        # NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
+        OvCF{N, CarX, CarZ, CarU}(LeaderFollowerControl(), world_model, delays),
         init_states,
         (comps, record_f),
         times,
