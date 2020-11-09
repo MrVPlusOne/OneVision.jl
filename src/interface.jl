@@ -87,7 +87,12 @@ function obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where {Z} @require_im
     obs::ℕ  # observation delay
     act::ℕ  # actuation delay
     com::ℕ  # communication delay
+    total::ℕ = obs + act + com
 end
+
+# function Base.getproperty(dm::DelayModel, s::Symbol)
+#     if 
+# end
 
 """
 A centralized controller with actuation type `U` and no delays.
@@ -133,7 +138,7 @@ struct WorldDynamics{N,XDynamics <: Tuple,UDynamics <: Tuple}
 end
 
 
-MsgQueue{Msg} = Queue{Each{Msg}}
+MsgQueue{Msg} = FixedQueue{Each{Msg}}
 
 abstract type ControllerFramework{X,Z,U,Msg} end
 

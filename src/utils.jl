@@ -1,8 +1,8 @@
-export @todo, @require_impl, constant_queue, colvec2vec, colvec, @unzip
-export @kwdef, Queue, enqueue!, dequeue!
+export @todo, @require_impl, colvec2vec, colvec, @unzip
+export FixedQueue, pushpop!, constant_queue
+export @kwdef
 
 import DataStructures
-using DataStructures: Queue, enqueue!, dequeue!
 using Base: @kwdef
 using Setfield: @set
 using QuadGK: quadgk
@@ -30,16 +30,8 @@ end
     f.f(x)
 end
 
-function DataStructures.Queue(xs::AbstractVector{T})::Queue{T} where T
-    q = Queue{T}()
-    foreach(xs) do x
-        enqueue!(q, x)
-    end
-    q
-end
-
-function constant_queue(value::T, q_size)::Queue{T} where {T}
-    Queue(repeat([value], q_size))
+function constant_queue(value::T, q_size)::FixedQueue{T} where {T}
+    FixedQueue(fill(value, q_size))
 end
 
 "Convert a 2-D column vector to a 1-D vector.\n"
@@ -94,4 +86,81 @@ macro unzip(xs, xs_type::Expr)
     result_t = type_transpose(xs_type)
     :(unzip_impl($(esc(xs))::$(esc(xs_type)))::$(esc(result_t)))
     # :(unzip_impl($xs::$xs_type)::$result_t) |> esc
+end
+
+"""
+A first-in-first-out queue with fixed length. Supporting a `push!` operation that 
+simultaneously push a value to the end of the queue and pop the value at the head 
+of the queue.
+
+Implemented using an array with a head pointer.
+
+# Examples
+```jldoctest
+julia> fq = FixedQueue(1:5)
+FixedQueue(len=5, queue=[1, 2, 3, 4, 5])
+
+julia> pushpop!(fq, 10), fq
+(1, FixedQueue(len=5, queue=[3, 4, 5, 10, 10]))
+
+julia> collect(fq)
+5-element Array{Int64,1}:
+  2
+  3
+  4
+  5
+ 10
+
+julia> foreach(11:20) do x
+    pushpop!(fq, x); println(fq)
+end
+FixedQueue(len=5, queue=[3, 4, 5, 10, 11])
+FixedQueue(len=5, queue=[4, 5, 10, 11, 12])
+FixedQueue(len=5, queue=[5, 10, 11, 12, 13])
+FixedQueue(len=5, queue=[10, 11, 12, 13, 14])
+FixedQueue(len=5, queue=[11, 12, 13, 14, 15])
+FixedQueue(len=5, queue=[12, 13, 14, 15, 16])
+FixedQueue(len=5, queue=[13, 14, 15, 16, 17])
+FixedQueue(len=5, queue=[14, 15, 16, 17, 18])
+FixedQueue(len=5, queue=[15, 16, 17, 18, 19])
+FixedQueue(len=5, queue=[16, 17, 18, 19, 20])
+```
+
+"""
+mutable struct FixedQueue{T} 
+    len::Int
+    head::Int
+    vec::Vector{T}
+
+    function FixedQueue(init::AbstractVector{T}) where T
+        vec = convert(Vector{T}, init)
+        new{T}(length(vec), 1, vec)
+    end
+end
+
+function Base.iterate(q::FixedQueue{T}, state::Int = 0) where T
+    i = mod1(q.head + state, q.len)
+    if state < q.len
+        q.vec[i], state+1
+    else
+        nothing
+    end
+end
+
+Base.length(q::FixedQueue) = q.len
+
+Base.eltype(::FixedQueue{T}) where T = T
+
+Base.first(q::FixedQueue) = q.vec[q.head]
+
+function pushpop!(q::FixedQueue{T}, x::T)::T where T
+    v = q.vec[q.head]
+    q.vec[q.head] = x
+    q.head = mod1(q.head + 1, q.len)
+    v
+end
+
+function Base.show(io::IO, q::FixedQueue) 
+    seq = [i for i in q]
+    print(io, "FixedQueue(len=$(q.len), queue=$seq)")
 end

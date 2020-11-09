@@ -82,10 +82,8 @@ let
 
     @testset "Self estimation" begin
         s0 = CarX(0, 0), 0
-        xs = map(1:10) do D
-            u_history = [CarU(0.1i) for i in 1:D]
-            self_estimate(sys, s0, u_history)
-        end
+        u_history = [CarU(0.1i) for i in 1:10]
+        xs = self_estimate(sys, s0, u_history)
         plot(1:10, hcat(xs...)'; label=["x" "v"]) |> display
     end
 end # Double integrater let

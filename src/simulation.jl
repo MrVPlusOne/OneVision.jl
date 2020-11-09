@@ -38,9 +38,9 @@ end
 
         
 @kwdef struct AgentState{X,Z,U,Msg}
-    state_queue::Queue{X}
-    obs_queue::Queue{Z}
-    act_queue::Queue{U}
+    state_queue::FixedQueue{X}
+    obs_queue::FixedQueue{Z}
+    act_queue::FixedQueue{U}
     msg_queue::MsgQueue{Msg}
     controller::Controller{X,Z,U,Msg}
 end
@@ -105,22 +105,18 @@ end
         transmition = MMatrix{N,N,Msg}(undef)  # indexed by (receiver, sender)
         @unroll for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
             a = agents[i]
-            enqueue!(a.state_queue, xs[i])
-            enqueue!(a.obs_queue, zs[i])
-            x = dequeue!(a.state_queue)
-            z = dequeue!(a.obs_queue)
-            ms = dequeue!(a.msg_queue)
+            x = pushpop!(a.state_queue, xs[i])
+            z = pushpop!(a.obs_queue, zs[i])
+            ms = first(a.msg_queue)
             u, ms′ = control!(a.controller, x, z, ms)
-            enqueue!(a.act_queue, u)
+            us[i] = pushpop!(a.act_queue, u)
             transmition[:,i] = ms′
         end
         # receive messagees and update world states
         @unroll for i in 1:length(agents)
             a = agents[i]
-            enqueue!(a.msg_queue, transmition[i,:])
-            u = dequeue!(a.act_queue)
-            us[i] = u
-            xs[i] = sys_forward(world_dynamics.dynamics[i], xs[i], u, t)
+            pushpop!(a.msg_queue, convert(Vector{Msg}, transmition[i,:]))
+            xs[i] = sys_forward(world_dynamics.dynamics[i], xs[i], us[i], t)
             zs[i] = obs_forward(world_dynamics.obs_dynamics[i], xs[i], zs[i], t)
         end
         # record results

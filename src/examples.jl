@@ -109,8 +109,8 @@ function run_example(times, delta_t::ℝ; plot_result=true)
     result = simulate(
         world_dynamics, 
         delays,
-        # NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
-        OvCF{N, CarX, CarZ, CarU}(LeaderFollowerControl(), world_model, delays),
+        NaiveCF{CarX,CarZ,CarU}(N, LeaderFollowerControl(), delays.com),
+        # OvCF{N, CarX, CarZ, CarU}(LeaderFollowerControl(), world_model, delays),
         init_states,
         (comps, record_f),
         times,

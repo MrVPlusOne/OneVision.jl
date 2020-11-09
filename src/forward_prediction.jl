@@ -10,7 +10,7 @@ struct ForwardPredictProblem{N,H,X,Z,U,Dy,Ctrl}
 
     function ForwardPredictProblem(
         world_dynamics::Dy, π::Ctrl; H, X, Z,
-    ) where {N,U, Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}}
+    ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}}
         new{N,H,X,Z,U,Dy,Ctrl}(
             world_dynamics, π, 
             MMatrix{H,N,X}(undef) ,MMatrix{H,N,Z}(undef))
@@ -48,20 +48,24 @@ function forward_predict(
         end
         x_traj[t,:] = xs
     end
-u_traj, x_traj
+    u_traj, x_traj
 end
 
+
 """
-Estimate the current state from an old state and the actuation history since then.
+Estimate the self state history using an old state and the actuation history.
+Returns `x_history`.
 """
 function self_estimate(
     self_dynamics::SysDynamics,
     s0::Tuple{X,𝕋},
     u_history,
-)::X where {X}
+)::Vector{X} where {X}
     x, τ = s0
+    x_history = Vector{X}(undef, length(u_history))
     for (t, u) in enumerate(u_history)
         x = sys_forward(self_dynamics, x, u, τ + t - 1)
+        x_history[t] = x
     end
-    x
+    x_history
 end
