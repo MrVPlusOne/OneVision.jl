@@ -153,6 +153,8 @@ Base.eltype(::FixedQueue{T}) where T = T
 
 Base.first(q::FixedQueue) = q.vec[q.head]
 
+Base.getindex(q::FixedQueue, i) = q.vec[mod1(q.head + i-1, q.len)]
+
 function pushpop!(q::FixedQueue{T}, x::T)::T where T
     v = q.vec[q.head]
     q.vec[q.head] = x
@@ -163,4 +165,11 @@ end
 function Base.show(io::IO, q::FixedQueue) 
     seq = [i for i in q]
     print(io, "FixedQueue(len=$(q.len), queue=$seq)")
+end
+
+function type_simplify(ty::DataType, max_depth::Int)
+    function rec(ty::DataType, d)
+        (d ≤ 0) && (return nameof(ty))
+        
+    end
 end

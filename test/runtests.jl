@@ -71,9 +71,9 @@ let
     @testset "Forward prediciton" begin
         N = 2
         world = WorldDynamics(fill((sys, NoObs()), 2))
-        prob = ForwardPredictProblem(world, RendezvousControl(); H, X=CarX, Z=CarZ)
         s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
         s2 = (CarX(2.0, 1.0), CarZ(0.0, 0.0))
+        prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; H)
         u_traj, x_traj = forward_predict(prob, [s1,s2], 0)
         y_data = hcat(x_traj[:,1]...)'
         plot(1:H, y_data; label=["x1", "v1"]) |> display

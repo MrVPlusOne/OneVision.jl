@@ -8,24 +8,28 @@ struct ForwardPredictProblem{N,H,X,Z,U,Dy,Ctrl}
     δx::MMatrix{H,N,X}
     δz::MMatrix{H,N,Z}
 
+    """
+        ForwardPredictProblem(world_dynamics, π; H, X, Z)
+    """
     function ForwardPredictProblem(
-        world_dynamics::Dy, π::Ctrl; H, X, Z,
-    ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}}
+        world_dynamics::Dy, π::Ctrl, x_zero::X, z_zero::Z; H,
+    ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}, X, Z}
         new{N,H,X,Z,U,Dy,Ctrl}(
             world_dynamics, π, 
-            MMatrix{H,N,X}(undef) ,MMatrix{H,N,Z}(undef))
+            MMatrix{H,N,X}(fill(x_zero, H, N)),
+            MMatrix{H,N,Z}(fill(z_zero, H, N)))
     end
 end
 
 
 """
 Forward-predict the ideal fleet trajectory.
-Returns `(ũ[t in τ: τ+H-1], x̃[t in τ+1: τ+H])`
+Returns `(ũ[t in t0: t0+H-1], x̃[t in t0+1: t0+H], z̃[t in t0+1: t0+H])`
 
 # Argument Details
- - `x0[τ]`: state at time τ
- - `x_path[t in τ+1: τ+H]`: state trajectory ∈ [τ+1, τ+H]
- - `u_path[t in τ: τ+H-1]`: action trajectory ∈ [τ, τ+H-1]
+ - `x0[t0]`: state at time t0
+ - `x_path[t in t0+1: t0+H]`: state trajectory ∈ [t0+1, t0+H]
+ - `u_path[t in t0: t0+H-1]`: action trajectory ∈ [t0, t0+H-1]
 """
 function forward_predict(
     prob::ForwardPredictProblem{N,H,X,Z,U},
@@ -33,6 +37,7 @@ function forward_predict(
     τ0::𝕋,
 ) where {X,Z,U,N,H}
     x_traj = MMatrix{H,N,X}(undef)
+    z_traj = MMatrix{H,N,Z}(undef)
     u_traj = MMatrix{H,N,U}(undef)
 
     xs = MVector{N,X}(first.(init_state))
@@ -47,8 +52,10 @@ function forward_predict(
             zs[i] = obs_forward(z_dy[i], xs[i], zs[i], N) + prob.δz[t, i]
         end
         x_traj[t,:] = xs
+        z_traj[t,:] = zs
+        u_traj[t,:] = us
     end
-    u_traj, x_traj
+    u_traj, x_traj, z_traj
 end
 
 

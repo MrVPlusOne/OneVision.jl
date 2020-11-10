@@ -84,9 +84,9 @@ function obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where {Z} @require_im
 
 
 @kwdef struct DelayModel
-    obs::ℕ  # observation delay
-    act::ℕ  # actuation delay
-    com::ℕ  # communication delay
+    obs::ℕ  # observation delay: Tx
+    act::ℕ  # actuation delay: Tu
+    com::ℕ  # communication delay: Tc
     total::ℕ = obs + act + com
 end
 

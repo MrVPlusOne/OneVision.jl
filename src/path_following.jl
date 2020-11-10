@@ -10,7 +10,7 @@ using Random, LinearAlgebra
 using StaticArrays
 import MutableArithmetics
 
-struct PathFollowingProblem{n_x,n_u,H,Dy <: SysDynamicsLinear}
+struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamicsLinear}
     horizon::Val{H}
     dy::Dy
     x_weights::StaticVector{n_x,ℝ}
@@ -31,7 +31,7 @@ Returns `(u⋆[t in τ: τ+H-1], x⋆[t in τ+1: τ+H], objective_value)`.
  - `u_path[t in τ: τ+H-1]`: action trajectory ∈ [τ, τ+H-1]
 """
 function follow_path(
-    p::PathFollowingProblem{n_x,n_u,H},
+    p::PathFollowingProblem{H,n_x,n_u},
     x0::SVector{n_x},
     x_path::SMatrix{n_x,H},
     u_path::SMatrix{n_u,H},
@@ -50,7 +50,7 @@ function follow_path(
 
     A(t)::SMatrix{n_x,n_x,ℝ} = sys_A(p.dy, τ + t - 1)
     B(t)::SMatrix{n_x,n_u,ℝ} = sys_B(p.dy, τ + t - 1)
-    w(t)::SMatrix{n_x,1,ℝ} = sys_w(p.dy,  τ + t - 1)
+    w(t)::SMatrix{n_x,1,ℝ} = sys_w(p.dy, τ + t - 1)
 
     # dynamics constraints
     @constraint(model, [t = 1:H],
@@ -63,7 +63,8 @@ function follow_path(
 
     optimize!(model)
 
-    value.(u), value.(x[:, 1:H]), objective_value(model)
+    @assert (obj = objective_value(model)) ≥ 0
+    value.(u), value.(x[:, 1:H]), obj
 end
 
 end # module

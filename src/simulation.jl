@@ -94,7 +94,6 @@ end
     times,
 ) where {X,Z,U,Msg,RF,N}
     @assert !isempty(times)
-    @assert length(agents) == N
     Each = MVector{N}
 
     xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
