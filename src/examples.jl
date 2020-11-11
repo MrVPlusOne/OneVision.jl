@@ -58,7 +58,7 @@ OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 @kwdef struct LeaderFollowerControl <: CentralControl{CarU}
     k_v::ℝ = 3.0
     k_x::ℝ = 2.0
-    stop_distance::ℝ = 3.0
+    stop_distance::ℝ = 4.0
     target_v::ℝ = 2.0
 end
 
@@ -76,7 +76,7 @@ OneVision.control_one(
 
     x = xs[id]
     z = zs[id]
-    if (z.detected ≉ 0) && x.pos ≤ z.distance - lf.stop_distance
+    if Bool(z.detected) && x.pos ≤ z.distance - lf.stop_distance
         acc = bang_bang(0.0, x.velocity, lf.k_v, tol)
     elseif id == 1
         # the leader
@@ -100,7 +100,7 @@ function run_example(times, delta_t::ℝ; plot_result=true)
         acc_noise = zeros(1 + t_end - t0)
         sys_dy = car_system(delta_t, t -> CarX(0, acc_noise[1 + t - t0]))
         obs_dy = 
-            if id == 1; WallObsDynamics(wall_position=15.0, detector_range=6.0)
+            if id == 1; WallObsDynamics(wall_position=30.0, detector_range=6.0)
             else WallObsModel() end
         
         sys_dy, obs_dy

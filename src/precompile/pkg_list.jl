@@ -5,6 +5,7 @@ pkg_list = [
     :OSQP,
     :MutableArithmetics,
     :Plots,
+    :Measures,
     :QuadGK,
     :Unrolled,
     :Setfield,

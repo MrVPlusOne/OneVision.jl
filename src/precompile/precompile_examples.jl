@@ -42,4 +42,6 @@ end
 
 using Plots
 @elapsed (p = plot(rand(5), rand(5)); display(p))
+@elapsed plotlyjs()
+@elapsed (p = plot(rand(5), rand(5)); display(p))
 @elapsed @MArray [1 5;6 3]
