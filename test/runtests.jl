@@ -13,6 +13,8 @@ using Plots
 using Test
 using Statistics: mean
 
+include("test_utils.jl")
+
 @testset "Discretize a double integrator" begin
     A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
     let dt = 1.23
@@ -40,7 +42,7 @@ let
             sys,
             x_weights,
             u_weights,
-            OSQP.Optimizer,
+            () -> OSQP.Optimizer(verbose=false),
         )
         x0 = SVector(CarX(-1.0, -1.0))
 
