@@ -63,8 +63,8 @@ function follow_path(
 
     optimize!(model)
 
-    @assert (obj = objective_value(model)) ≥ 0
-    value.(u), value.(x[:, 1:H]), obj
+    @assert (obj = objective_value(model)) ≥ -sqrt(eps()) "negative objective: $(obj)"
+    value.(u), value.(x[:, 2:end]), obj
 end
 
 end # module

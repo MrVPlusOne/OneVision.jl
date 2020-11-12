@@ -2,7 +2,7 @@ export ℝ, ℕ, 𝕋, Each
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, ObsDynamics, discretize
 export sys_forward, sys_A, sys_B, sys_w, obs_forward
 export DelayModel, WorldDynamics, CentralControl, control_one, control_all
-export Controller, control!
+export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
 
 const ℝ = Float64  # use 64-bit precision for real numbers
@@ -83,11 +83,16 @@ the OneVision will only work well if `z` does not (or weakly) depend on `x`.
 function obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where {Z} @require_impl end
 
 
-@kwdef struct DelayModel
+struct DelayModel
     obs::ℕ  # observation delay: Tx
     act::ℕ  # actuation delay: Tu
     com::ℕ  # communication delay: Tc
-    total::ℕ = obs + act + com
+    total::ℕ
+
+    DelayModel(;obs, act, com) = begin 
+        @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
+        new(obs,act,com, obs+act+com)
+    end
 end
 
 # function Base.getproperty(dm::DelayModel, s::Symbol)
@@ -115,7 +120,7 @@ end
 
 
 "A distributed controller, typically generated from a controller framework.\n"
-abstract type Controller{X,Z,U,Msg} end
+abstract type Controller{X,Z,U,Msg,Log} end
 
 function control!(
     ctrl::Controller{X,Z,U,Msg},
@@ -123,6 +128,15 @@ function control!(
     obs::Z,
     msgs::Each{Msg},
 )::Tuple{U,Each{Msg}} where {X,Z,U,Msg}
+    @require_impl
+end
+
+"""
+This function will be called at the end of the simulation.
+"""
+function write_logs(
+    ctrl::Controller{X,Z,U,Msg,Log} where {X,Z,U,Msg}
+)::Dict{𝕋,Log} where Log
     @require_impl
 end
 
@@ -140,7 +154,7 @@ end
 
 MsgQueue{Msg} = FixedQueue{Each{Msg}}
 
-abstract type ControllerFramework{X,Z,U,Msg} end
+abstract type ControllerFramework{X,Z,U,Msg,Log} end
 
 """
 Returns a tuple of `(controllers, message queues)`

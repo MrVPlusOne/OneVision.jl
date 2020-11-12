@@ -1,25 +1,25 @@
-export simulate, SimulationResult, visualize
+export simulate, TrajectoryData, visualize
 
 using Plots: Plot, plot
 using StaticArrays
 using Unrolled
 
 "Results are indexed by (time, agent, component)"
-@kwdef struct SimulationResult
+@kwdef struct TrajectoryData
     times::Vector{𝕋}
     values::Array{ℝ,3}
     components::Vector{String}
 end
 
-SimulationResult(times::Vector{𝕋}, num_agents::ℕ, components::Vector{String}) = begin
+TrajectoryData(times::Vector{𝕋}, num_agents::ℕ, components::Vector{String}) = begin
     values = Array{ℝ}(undef, length(times), num_agents, length(components))
-    SimulationResult(times, values, components) 
-end 
+    TrajectoryData(times, values, components) 
+end
 
 "A generic result visualization function that draws multiple line plots, 
 one for each component of the state vector.\n"
 function visualize(
-    result::SimulationResult; delta_t=nothing
+    result::TrajectoryData; delta_t=nothing
 )::Vector{Plot}
     if delta_t === nothing
         times = result.times
@@ -37,18 +37,18 @@ function visualize(
 end
 
         
-@kwdef struct AgentState{X,Z,U,Msg}
+@kwdef struct AgentState{X,Z,U,Msg,Log}
     state_queue::FixedQueue{X}
     obs_queue::FixedQueue{Z}
     act_queue::FixedQueue{U}
     msg_queue::MsgQueue{Msg}
-    controller::Controller{X,Z,U,Msg}
+    controller::Controller{X,Z,U,Msg,Log}
 end
   
 
 """
 Simulate multiple distributed agents with the given initial states and controllers and 
-return the resulting trajectory as a `Simulation` struct.
+return `(trajectory data, snapshots)`.
 
 # Arguments
 - `times::Vector{𝕋}`: the time instances at which the simulation should save the states in 
@@ -56,15 +56,17 @@ the result. The first element in this sequence should be the time of the given i
 - `recorder`: a tuple of the shape `(components::Vector{String}, record_f)`, where 
    `record_f` should takes in `(xs, zs, us)` and returns a real matrix of the size 
    `(num agents, length(components))`.
+- `save_snapshot`: takes in `(id, time, x, z, u)` and returns a bool to indicate whether to
+take a detailed snapshot for the current controller status.
 """
 function simulate(
     world_dynamics::WorldDynamics{N},
     delay_model::DelayModel,
-    framework::ControllerFramework{X,Z,U,Msg},
+    framework::ControllerFramework{X,Z,U,Msg,Log},
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},
     times::Vector{𝕋},
-)::SimulationResult where {X,Z,U,Msg,N}
+)::Tuple{TrajectoryData, Dict{ℕ, Dict{𝕋, Log}}} where {X,Z,U,Msg,Log,N}
     (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
     
     make_agent(id::ℕ)::AgentState = begin
@@ -86,23 +88,23 @@ function simulate(
     )
 end
 
-@unroll function simulate_impl(
+function simulate_impl(
     world_dynamics::WorldDynamics{N},
-    agents::SVector{N,AgentState{X,Z,U,Msg}},
+    agents::SVector{N,AgentState{X,Z,U,Msg,Log}},
     init_status::SVector{N,Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},RF},
     times,
-) where {X,Z,U,Msg,RF,N}
+) where {X,Z,U,Msg,Log,RF,N}
     @assert !isempty(times)
     Each = MVector{N}
 
     xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
-    result = SimulationResult(times, N, recorder[1])
+    result = TrajectoryData(times, N, recorder[1])
     data_idx = 1
     for t in times[1]:times[end]
         # observe, control, and send messages
         transmition = MMatrix{N,N,Msg}(undef)  # indexed by (receiver, sender)
-        @unroll for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
+        for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
             a = agents[i]
             x = pushpop!(a.state_queue, xs[i])
             z = pushpop!(a.obs_queue, zs[i])
@@ -112,7 +114,7 @@ end
             transmition[:,i] = ms′
         end
         # receive messagees and update world states
-        @unroll for i in 1:length(agents)
+        for i in 1:length(agents)
             a = agents[i]
             pushpop!(a.msg_queue, convert(Vector{Msg}, transmition[i,:]))
             xs[i] = sys_forward(world_dynamics.dynamics[i], xs[i], us[i], t)
@@ -127,5 +129,6 @@ end
             data_idx += 1
         end
     end
-    result
+    logs = Dict(i => write_logs(agents[i].controller) for i in 1:N)
+    result, logs
 end

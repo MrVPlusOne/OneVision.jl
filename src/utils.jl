@@ -1,4 +1,4 @@
-export @todo, @require_impl, colvec2vec, colvec, @unzip
+export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT
 export FixedQueue, pushpop!, constant_queue
 export print_multiple, show_type, repr_type, show_simple_type
 export @kwdef
@@ -24,7 +24,7 @@ If `a` has type `FuncT{X,Y,F}`, then `a(x)` is equivalent to `a.f(x::X)::Y`.
 struct FuncT{X,Y,F} <: Function
     f::F
 
-    FuncT(::Type{X}, ::Type{Y}, f::F) where {X,Y,F} = new{X,Y,F}(f)
+    FuncT(f::F, ::Type{X}, ::Type{Y}) where {X,Y,F} = new{X,Y,F}(f)
 end
 
 @inline function (f::FuncT{X,Y})(x::X)::Y where {X,Y}
@@ -140,8 +140,8 @@ mutable struct FixedQueue{T}
 end
 
 function Base.iterate(q::FixedQueue{T}, state::Int = 0) where T
-    i = mod1(q.head + state, q.len)
     if state < q.len
+        i = mod1(q.head + state, q.len)
         q.vec[i], state+1
     else
         nothing
@@ -150,13 +150,18 @@ end
 
 Base.length(q::FixedQueue) = q.len
 
+Base.lastindex(q::FixedQueue) = q.len
+
 Base.eltype(::FixedQueue{T}) where T = T
 
 Base.first(q::FixedQueue) = q.vec[q.head]
 
-Base.getindex(q::FixedQueue, i) = q.vec[mod1(q.head + i-1, q.len)]
+Base.getindex(q::FixedQueue, i::Integer) = q.vec[mod1(q.head + i-1, q.len)]
+Base.getindex(q::FixedQueue, range::UnitRange) = 
+    (q.vec[mod1(q.head + i-1, q.len)] for i in range)
 
 function pushpop!(q::FixedQueue{T}, x::T)::T where T
+    (q.len==0) && return x
     v = q.vec[q.head]
     q.vec[q.head] = x
     q.head = mod1(q.head + 1, q.len)
@@ -167,7 +172,7 @@ function Base.show(io::IO, q::FixedQueue)
     seq = [i for i in q]
     print(io, "FixedQueue(len=$(q.len), queue=$seq)")
 end
-
+    
 """
 # Examples
 ```jldoctest
@@ -302,4 +307,3 @@ end
 
 @info "Replace Base.show(io::IO, x::Type) with show_type."
 show_simple_type()
-    

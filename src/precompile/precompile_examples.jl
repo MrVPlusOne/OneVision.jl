@@ -41,7 +41,12 @@ using JuMP, OSQP
 end
 
 using Plots
+@elapsed gr()
 @elapsed (p = plot(rand(5), rand(5)); display(p))
+@gif for i in 1:5
+    plot(rand(5), rand(5))
+    plot!(rand(5), rand(5))
+end
 @elapsed plotlyjs()
 @elapsed (p = plot(rand(5), rand(5)); display(p))
 @elapsed @MArray [1 5;6 3]

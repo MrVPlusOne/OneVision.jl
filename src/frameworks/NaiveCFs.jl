@@ -5,19 +5,22 @@ struct NaiveMsg{X,Z}
     z::Z
 end
 
-struct NaiveCF{X,Z,U} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z}}
+struct NaiveCF{X,Z,U} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z},Nothing}
     num_agents::ℕ
     central::CentralControl
     msg_delay::ℕ
 end
 
-mutable struct NaiveController{X,Z,U} <: Controller{X,Z,U,NaiveMsg{X,Z}}
+mutable struct NaiveController{X,Z,U} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
     self::ℕ
     central::CentralControl
     t::𝕋
 end
 
-function control!(
+# NaiveCF has nothing to log
+OneVision.write_logs(::NaiveController) = Dict{𝕋,Nothing}()
+
+function OneVision.control!(
     ctrl::NaiveController{X,Z,U},
     x::X,
     z::Z,
@@ -32,7 +35,7 @@ function control!(
     u, msgs′
 end
 
-function make_controllers(
+function OneVision.make_controllers(
     framework::NaiveCF{X,Z,U},
     init_status::Each{Tuple{X,Z,U}},
     init_t::𝕋,

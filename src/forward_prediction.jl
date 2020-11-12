@@ -28,8 +28,8 @@ Returns `(ũ[t in t0: t0+H-1], x̃[t in t0+1: t0+H], z̃[t in t0+1: t0+H])`
 
 # Argument Details
  - `x0[t0]`: state at time t0
- - `x_path[t in t0+1: t0+H]`: state trajectory ∈ [t0+1, t0+H]
- - `u_path[t in t0: t0+H-1]`: action trajectory ∈ [t0, t0+H-1]
+ - `prob.δx`: state disturbance ∈ [t0, t0+H-1]
+ - `prob.δz`: observation disturbance ∈ [t0, t0+H-1]
 """
 function forward_predict(
     prob::ForwardPredictProblem{N,H,X,Z,U},
