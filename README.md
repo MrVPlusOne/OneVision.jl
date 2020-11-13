@@ -17,6 +17,17 @@ export PATH="$PATH:/opt/julia-153/bin"
 ```
 
 ### Installing necessary dependencies
+#### arm modification (jetson tx2 specific)
+Due to package compatibiliies, some package will have to be installed in an alternative manner. Note that the following are only validated on Jetson TX2 with 18.04 - your milage may vary. 
+
+OSQP:
+```
+] add https://github.com/TongruiLi/OSQP.jl
+```
+
+
+
+#### Installation
 In the top directory of the cloned repo, press ] and then do 
 ```
 activate .
