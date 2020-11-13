@@ -4,7 +4,7 @@ export PathFollowingProblem, follow_path
 using OneVision: ℝ, 𝕋
 using OneVision
 using JuMP
-using OSQP
+import OSQP
 using MathOptInterface: AbstractOptimizer
 using Random, LinearAlgebra
 using StaticArrays
@@ -15,7 +15,6 @@ struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamicsLinear}
     dy::Dy
     x_weights::StaticVector{n_x,ℝ}
     u_weights::StaticVector{n_u,ℝ}
-    make_optimizer
 end
 
 function MutableArithmetics.undef_array(::Type{Array{T,N}}, ::StaticArrays.SOneTo{M}) where {T,N,M}
@@ -39,7 +38,10 @@ function follow_path(
 )::Tuple where {n_x,n_u,H}
     local x, u, Min
 
-    model = Model(p.make_optimizer)
+    model = Model(() -> OSQP.Optimizer())
+    set_optimizer_attribute(model, "verbose", false)
+    set_optimizer_attribute(model, "warm_start", true)
+
     @variables model begin
         x[1:n_x, 1:H + 1]
         u[1:n_u, 1:H]

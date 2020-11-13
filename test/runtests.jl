@@ -13,8 +13,6 @@ using Plots
 using Test
 using Statistics: mean
 
-include("test_utils.jl")
-
 @testset "Discretize a double integrator" begin
     A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
     let dt = 1.23

@@ -28,13 +28,12 @@ const car_A = @SMatrix [0.0 1.0; 0.0 0.0]
 const car_B = @SMatrix [0.0; 1.0]
 
 
-function car_system(delta_t::ℝ, noise::Function)
+function car_system(delta_t::ℝ, noise::Function = _ -> CarX(0.0, 0.0))
     A′, B′ = discretize(car_A, car_B, delta_t)
     SysDynamicsLTI(A′, B′, noise)
 end
     
-car_system(delta_t::ℝ) = car_system(delta_t, _ -> CarX(0.0, 0.0))
-
+"The wall observation model used for simulation.\n"
 @kwdef struct WallObsDynamics <: ObsDynamics
     wall_position::Union{ℝ,Nothing}
     detector_range::ℝ
@@ -51,9 +50,9 @@ OneVision.obs_forward(dy::WallObsDynamics, x::CarX, z::CarZ, t::𝕋)::CarZ = be
     end
 end
 
+"The simple wall dynamics model used by OneVision."
 struct WallObsModel <: ObsDynamics end
 
-"The model simply assumes the wall position stays the same\n"
 OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 
 @kwdef struct LeaderFollowerControl <: CentralControl{CarU}
@@ -76,11 +75,10 @@ OneVision.control_one(
         end
     end
 
-    x = xs[id]
-    z = zs[id]
+    x,z = xs[id], zs[id]
     if t ≤ lf.warm_up_time
         acc = 0.0
-    elseif Bool(z.detected) && x.pos ≥ z.distance - lf.stop_distance
+    elseif Bool(z.detected) && z.distance - x.pos ≤ lf.stop_distance
         acc = bang_bang(0.0, x.velocity, lf.k_v, tol)
     elseif id == 1
         # the leader
@@ -88,14 +86,14 @@ OneVision.control_one(
     else
         # a follower
         leader = xs[1]
-        acc = (bang_bang(leader.velocity, x.velocity, lf.k_v, 100)
-                + bang_bang(leader.pos, x.pos, lf.k_x, 100)
-                + control_one(lf, xs, zs, t, 1).acc)
+        acc = (control_one(lf, xs, zs, t, 1).acc # mimic the leader
+                + bang_bang(leader.velocity, x.velocity, lf.k_v, Inf)
+                + bang_bang(leader.pos, x.pos, lf.k_x, Inf))
     end
     CarU(acc)
 end
 
-function run_example(times, freq::ℝ; plot_result=true, log_prediction=false)
+function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_prediction=false)
     delta_t = 1/freq
     times::Vector{𝕋} = collect(times)
     idx_to_time(xs) = (xs .- 1) .* delta_t
@@ -103,8 +101,7 @@ function run_example(times, freq::ℝ; plot_result=true, log_prediction=false)
     rng = MersenneTwister(1234)
     
     agent_info(id) = begin
-        # acc_noise = randn(rng, ℝ, 1 + t_end - t0)
-        acc_noise = zeros(1 + t_end - t0)
+        acc_noise = randn(rng, ℝ, 1 + t_end - t0) * noise
         sys_dy = car_system(delta_t, t -> CarX(0, acc_noise[1 + t - t0]))
         obs_dy = 
             if id == 1; WallObsDynamics(wall_position=30.0, detector_range=8.0)
