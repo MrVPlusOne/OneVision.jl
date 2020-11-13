@@ -33,3 +33,8 @@ In the top directory of the cloned repo, press ] and then do
 activate .
 instantiate
 ```
+### running
+
+```
+julia --sysimage <path to image>
+```
