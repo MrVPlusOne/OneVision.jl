@@ -4,7 +4,6 @@ pkg_list = [
     :JuMP,
     :OSQP,
     :MutableArithmetics,
-    :Plots,
     :Measures,
     :QuadGK,
     :Unrolled,

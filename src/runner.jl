@@ -8,8 +8,9 @@ else
 end
 
 using BenchmarkTools: @benchmark
-using Plots, Measures
-plotlyjs()
+#using Plots, 
+using Measures
+#plotlyjs()
 
 t_end = 30
 freq = 20.0
@@ -19,8 +20,8 @@ let
 
     width = 500
     height = 300
-    n = length(plts)
-    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin = 1cm) |> display
+    #n = length(plts)
+    #plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin = 1cm) |> display
 end
 
 

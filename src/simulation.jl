@@ -1,6 +1,6 @@
 export simulate, TrajectoryData, visualize
 
-using Plots: Plot, plot
+#using Plots: Plot, plot
 using StaticArrays
 using Unrolled
 
@@ -20,20 +20,8 @@ end
 one for each component of the state vector.\n"
 function visualize(
     result::TrajectoryData; delta_t=nothing
-)::Vector{Plot}
-    if delta_t === nothing
-        times = result.times
-        xlabel = "time step"
-    else
-        times = result.times .* delta_t 
-        xlabel = "time (s)"
-    end
-    ## currently assume all agents have the same type of states and observations
-    labels = reshape(["agent $i" for i in 1:size(result.values, 2)], (1, :))
-    map(enumerate(result.components)) do (c_id, comp)
-        ys = result.values[:,:,c_id]
-        plot(times, ys; title=comp, label=labels, xlabel)
-    end
+)
+
 end
 
         

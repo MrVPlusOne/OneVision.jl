@@ -39,7 +39,7 @@ using JuMP, OSQP
     
     value.(x[:, 1:H]), objective_value(model)
 end
-
+"""
 using Plots
 @elapsed gr()
 @elapsed (p = plot(rand(5), rand(5)); display(p))
@@ -50,3 +50,4 @@ end
 @elapsed plotlyjs()
 @elapsed (p = plot(rand(5), rand(5)); display(p))
 @elapsed @MArray [1 5;6 3]
+"""

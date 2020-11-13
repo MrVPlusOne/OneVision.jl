@@ -5,7 +5,7 @@ using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef
 using Random
 using StaticArrays
-using Plots
+#using Plots
 
 import OneVision
 
@@ -147,23 +147,25 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
         x_indices = [t for t in result.times if t0 ≤ (t-1)*delta_t ≤ t1]
         sorted_log = sort!([x for x in logs[id]], by=x -> x[1])
         δv_x = idx_to_time((x->x[1]).(sorted_log))
-        anim = @gif for (t, log) in sorted_log
+        #anim = @gif for (t, log) in sorted_log
             ps = []
             for (c, label) in enumerate(["δx", "δv"])
                 δv_y = [log.δxz[1][c] for (_, log) in sorted_log]
-                p = plot(idx_to_time(x_indices), 
-                        result.values[x_indices,:,c], label=["agent 1" "agent 2"])
-                plot!(p, δv_x, δv_y, label=label)
+
+                #p = plot(idx_to_time(x_indices), 
+                #        result.values[x_indices,:,c], label=["agent 1" "agent 2"])
+                #plot!(p, δv_x, δv_y, label=label)
                 t -= 1
                 local ts = idx_to_time(t:t+size(log.x̃,1)-1)
-                plot!(p, ts, (x->x[c]).(log.x̃); label = ["central 1" "central 2"])
-                push!(ps,p)
+                #plot!(p, ts, (x->x[c]).(log.x̃); label = ["central 1" "central 2"])
+                #push!(ps,p)
             end
-            plot(ps...; layout=(2,1))
+            #plot(ps...; layout=(2,1))
         end
-        anim |> display
+        #anim |> display
     end
-    plot_result ? visualize(result; delta_t) : result
-end
+    
+    #plot_result ? visualize(result; delta_t) : result
+    return result
 
 end # Car1DExampleLabeled
