@@ -72,7 +72,7 @@ function OneVision.make_controllers(
         end
         x_weights = let v = cf.x_weights[id]; SVector{length(v)}(v) end
         u_weights = let v = cf.u_weights[id]; SVector{length(v)}(v) end
-        pf_prob = PathFollowingProblem(Val(H), x_dy, x_weights, u_weights)
+        pf_prob = PathFollowingProblem(Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing))
         OvController(;
             id, cf, τ=t0, u_history, pred_xz, self_δxz, ideal_xz, fp_prob, pf_prob,
             logs=Dict{𝕋,OvLog{X,Z,U}}(),

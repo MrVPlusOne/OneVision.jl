@@ -5,6 +5,7 @@ using OneVision: ℝ, 𝕋
 using OneVision
 using JuMP
 import OSQP
+# import COSMO
 using MathOptInterface: AbstractOptimizer
 using Random, LinearAlgebra
 using StaticArrays
@@ -15,6 +16,7 @@ struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamicsLinear}
     dy::Dy
     x_weights::StaticVector{n_x,ℝ}
     u_weights::StaticVector{n_u,ℝ}
+    cache::Ref{Any}
 end
 
 function MutableArithmetics.undef_array(::Type{Array{T,N}}, ::StaticArrays.SOneTo{M}) where {T,N,M}
@@ -39,8 +41,10 @@ function follow_path(
     local x, u, Min
 
     model = Model(() -> OSQP.Optimizer())
-    set_optimizer_attribute(model, "verbose", false)
-    set_optimizer_attribute(model, "warm_start", true)
+    # model = Model(() -> COSMO.Optimizer())
+    set_silent(model)
+
+    # set_optimizer_attribute(model, "warm_start", true)
 
     @variables model begin
         x[1:n_x, 1:H + 1]
@@ -63,8 +67,19 @@ function follow_path(
         sum((x[:,2:end] - x_path).^2 .* p.x_weights) + sum((u - u_path).^2 .* p.u_weights)
     )
 
+    use_warmstart = false
+    if use_warmstart && !ismissing(p.cache[])
+        x0, u0 = p.cache[]
+        set_start_value.(x[1:n_x, 2:H], x0)
+        set_start_value.(u[1:n_u, 1:H-1], u0)
+    end
+
     optimize!(model)
 
+    if use_warmstart
+        p.cache[] = value.(x[1:n_x, 3:H + 1]), value.(u[1:n_u, 2:H])
+    end
+        
     @assert (obj = objective_value(model)) ≥ -sqrt(eps()) "negative objective: $(obj)"
     value.(u), value.(x[:, 2:end]), obj
 end
