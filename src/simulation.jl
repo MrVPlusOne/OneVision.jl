@@ -66,7 +66,7 @@ function simulate(
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},
     times::Vector{𝕋},
-)::Tuple{TrajectoryData, Dict{ℕ, Dict{𝕋, Log}}} where {X,Z,U,Msg,Log,N}
+)::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
     (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
     
     make_agent(id::ℕ)::AgentState = begin

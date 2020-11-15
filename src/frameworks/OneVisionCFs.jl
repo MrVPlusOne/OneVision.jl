@@ -15,7 +15,7 @@ struct OvLog{X,Z,U}
     δxz::Tuple{X,Z}
 end
 
-function to_array(m::MMatrix{n1, n2, T}) where {n1,n2,T}
+function to_array(m::MMatrix{n1,n2,T}) where {n1,n2,T}
     r = Matrix{T}(undef, n1, n2)
     copyto!(r, m)
 end
@@ -63,7 +63,7 @@ function OneVision.make_controllers(
         x0, z0, u0 = init_status[id]
         u_history = constant_queue(u0, dm.obs + dm.act)
         x_dy = cf.world_model.dynamics[id]
-        pred_xz = (x0,z0)
+        pred_xz = (x0, z0)
         self_δxz = constant_queue((zero(x0), zero(z0)), dm.com + 1)
         ideal_xz = [(x, z) for (x, z, _) in init_status]
 
@@ -132,8 +132,8 @@ function OneVision.control!(
     u_plan, loss = let 
         n_x, n_u = length(X), length(U)
         x0 = SVector{n_x}(x_self)
-        x_path = SMatrix{n_x,H}(hcat(x̃[2+dm.total:end,id]...))  # [τ+Tu+1:τ+Tu+H]
-        u_path = SMatrix{n_u,H}(hcat(ũ[2+dm.total:end,id]...))  # [τ+Tu:τ+Tu+H-1]
+        x_path = SMatrix{n_x,H}(hcat(x̃[2 + dm.total:end,id]...))  # [τ+Tu+1:τ+Tu+H]
+        u_path = SMatrix{n_u,H}(hcat(ũ[2 + dm.total:end,id]...))  # [τ+Tu:τ+Tu+H-1]
         follow_path_optim(π.pf_prob, x0, x_path, u_path, π.τ + dm.act)
     end
     
@@ -149,7 +149,7 @@ function OneVision.control!(
     end
 
     if should_log 
-        π.logs[π.τ-dm.obs - dm.com] = OvLog(to_array.((ũ, x̃, z̃))..., δxz)
+        π.logs[π.τ - dm.obs - dm.com] = OvLog(to_array.((ũ, x̃, z̃))..., δxz)
     end
 
     u, fill(new_msg, N)

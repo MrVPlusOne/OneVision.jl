@@ -20,7 +20,7 @@ let
     width = 500
     height = 300
     n = length(plts)
-    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin = 1cm) |> display
+    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin=1cm) |> display
 end
 
 
