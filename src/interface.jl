@@ -56,7 +56,7 @@ sys_B(s::SysDynamicsLTI, t) = s.B
 sys_w(s::SysDynamicsLTI, t) = s.w(t)
 
 function sys_forward(dy::SysDynamicsLTI, x::X, u, t::𝕋)::X where {X}
-    (dy.A * x + dy.B * u + (dy.w(t)::X))
+    (dy.A * x + dy.B * u + convert(X,dy.w(t)))
 end
 
 """

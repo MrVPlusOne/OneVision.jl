@@ -27,5 +27,5 @@ end
 # using StatProfilerHTML
 # @profilehtml for _ in 1:1000; run_example(1:20 * t_end, freq) end
 
-@benchmark run_example(1:20 * t_end, freq; plot_result=false)
+@benchmark run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
 

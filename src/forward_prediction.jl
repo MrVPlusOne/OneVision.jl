@@ -14,6 +14,9 @@ struct ForwardPredictProblem{N,H,X,Z,U,Dy,Ctrl}
     function ForwardPredictProblem(
         world_dynamics::Dy, π::Ctrl, x_zero::X, z_zero::Z; H,
     ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}, X, Z}
+        @assert isbitstype(X) "X = $X is not of bits type"
+        @assert isbitstype(Z) "Z = $Z is not of bits type"
+        @assert isbitstype(U) "U = $U is not of bits type"
         new{N,H,X,Z,U,Dy,Ctrl}(
             world_dynamics, π, 
             MMatrix{H,N,X}(fill(x_zero, H, N)),
@@ -46,7 +49,7 @@ function forward_predict(
     z_dy = prob.world_dynamics.obs_dynamics
 
     for t in 1:H
-        us = control_all(prob.π, xs, zs, τ0 + t - 1, 1:N)
+        us = control_all(prob.π, xs, zs, τ0 + t - 1, Base.OneTo(N))
         @inbounds for i in 1:N
             xs[i] = sys_forward(x_dy[i], xs[i], us[i], N) + prob.δx[t, i]
             zs[i] = obs_forward(z_dy[i], xs[i], zs[i], N) + prob.δz[t, i]

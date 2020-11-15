@@ -9,18 +9,18 @@ using Plots
 
 import OneVision
 
-struct CarX <: FieldVector{2,ℝ}
-    pos::ℝ
-    velocity::ℝ
+struct CarX{R} <: FieldVector{2,R}
+    pos::R
+    velocity::R
 end
 
-struct CarU <: FieldVector{1,ℝ}
-    acc::ℝ
+struct CarU{R} <: FieldVector{1,R}
+    acc::R
 end
 
-struct CarZ <: FieldVector{2,ℝ}
-    detected::ℝ
-    distance::ℝ
+struct CarZ{R} <: FieldVector{2,R}
+    detected::R
+    distance::R
 end
 
 
@@ -39,7 +39,9 @@ end
     detector_range::ℝ
 end
 
-OneVision.obs_forward(dy::WallObsDynamics, x::CarX, z::CarZ, t::𝕋)::CarZ = begin
+function OneVision.obs_forward(
+    dy::WallObsDynamics, x::CarX, z::CarZ{R}, t::𝕋
+)::CarZ{R} where R
     if Bool(z.detected)
         z
     elseif (isnothing(dy.wall_position) 
@@ -55,7 +57,7 @@ struct WallObsModel <: ObsDynamics end
 
 OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 
-@kwdef struct LeaderFollowerControl <: CentralControl{CarU}
+@kwdef struct LeaderFollowerControl <: CentralControl{CarU{ℝ}}
     warm_up_time::𝕋  # Will output u=0 before this time
     k_v::ℝ = 3.0
     k_x::ℝ = 2.0
@@ -64,8 +66,8 @@ OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 end
 
 OneVision.control_one(
-    lf::LeaderFollowerControl, xs::AbstractVector{CarX},zs::AbstractVector{CarZ}, t::𝕋, id::ℕ
-)::CarU = begin
+    lf::LeaderFollowerControl, xs,zs, t::𝕋, id::ℕ
+)::CarU{ℝ} = begin
     tol = 0.5
     function bang_bang(x̂, x, k, tol)
         if abs(x̂ - x) ≤ tol
@@ -102,7 +104,7 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
     
     agent_info(id) = begin
         acc_noise = randn(rng, ℝ, 1 + t_end - t0) * noise
-        sys_dy = car_system(delta_t, t -> CarX(0, acc_noise[1 + t - t0]))
+        sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[1 + t - t0]))
         obs_dy = 
             if id == 1; WallObsDynamics(wall_position=30.0, detector_range=8.0)
             else WallObsModel() end
@@ -128,11 +130,11 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
         world_dynamics, 
         delays,
         # NaiveCF{CarX,CarZ,CarU}(N, πc, delays.com),
-        let x_weights = fill(CarX(1, 1), 2), u_weights = fill(CarU(1), 2)
-            OvCF{N,CarX,CarZ,CarU,H}(
+        let x_weights = fill(CarX(1.0, 1.0), 2), u_weights = fill(CarU(1.0), 2)
+            OvCF{N,CarX{ℝ},CarZ{ℝ},CarU{ℝ},H}(
                 πc, 
                 world_model, delays, x_weights, u_weights,
-                FuncT(Tuple{ℕ,𝕋,CarX,CarZ}, Bool) do (id, t, _,_) 
+                FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _,_) 
                     log_prediction && mod1(t,2)==2 && 0.0 ≤ (t-1)*delta_t ≤ 10.0
                 end
             )  

@@ -129,12 +129,12 @@ function OneVision.control!(
     # local planning using path following
     
     # u_plan: [τ+Tu:τ+Tu+H-1], x_plan: [τ+Tu+1:τ+Tu+H]
-    u_plan, x_plan = let 
+    u_plan, loss = let 
         n_x, n_u = length(X), length(U)
         x0 = SVector{n_x}(x_self)
         x_path = SMatrix{n_x,H}(hcat(x̃[2+dm.total:end,id]...))  # [τ+Tu+1:τ+Tu+H]
         u_path = SMatrix{n_u,H}(hcat(ũ[2+dm.total:end,id]...))  # [τ+Tu:τ+Tu+H-1]
-        follow_path(π.pf_prob, x0, x_path, u_path, π.τ + dm.act)
+        follow_path_optim(π.pf_prob, x0, x_path, u_path, π.τ + dm.act)
     end
     
     u = (U <: FieldVector) ? U(u_plan[:,1]...) : convert(U, u_plan[:,1])

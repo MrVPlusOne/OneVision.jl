@@ -40,14 +40,15 @@ let
             sys,
             x_weights,
             u_weights,
-            () -> OSQP.Optimizer(verbose=false),
+            Ref{Any}(missing),
         )
         x0 = SVector(CarX(-1.0, -1.0))
 
-        # x_path = SMatrix{2,H}(hcat(zeros(2, H ÷ 2), fill([1;0], H ÷ 2)...))
-        x_path = SMatrix{2,H}(hcat(fill(CarX(1, 0), H)...))
-        u_path = SMatrix{1,H}(hcat(fill(CarU(0), H)...))
-        u, x, obj = follow_path(prob, x0, x_path, u_path, 0)
+        x_path = SMatrix{2,H,ℝ}(hcat(fill(CarX(1.0, 0.0), H)...))
+        u_path = SMatrix{1,H,ℝ}(hcat(fill(CarU(0.0), H)...))
+        t0 = 0
+        u, obj = follow_path_optim(prob, x0, x_path, u_path, t0)
+        x = x_path_from_u(x0, t0, u_path, prob.dy)
         times = (1:H) * dt
         plot(
             plot(times, u'; label="u"),
@@ -61,7 +62,7 @@ let
     struct NoObs <: ObsDynamics end
     OneVision.obs_forward(::NoObs, x, z, t::𝕋) = z
 
-    struct RendezvousControl <: CentralControl{CarU} end
+    struct RendezvousControl <: CentralControl{CarU{ℝ}} end
 
     OneVision.control_one(::RendezvousControl, xs, zs, t::𝕋, id::ℕ) = begin
         target = mean(xs)
@@ -81,7 +82,7 @@ let
     end
 
     @testset "Self estimation" begin
-        s0 = CarX(0, 0), 0
+        s0 = CarX(0.0, 0.0), 0
         u_history = [CarU(0.1i) for i in 1:10]
         xs = self_estimate(sys, s0, u_history)
         plot(1:10, hcat(xs...)'; label=["x" "v"]) |> display
