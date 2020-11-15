@@ -113,7 +113,7 @@ function follow_path_optim(
     n_u_H = n_u * H
     function loss(uvec)
         R = eltype(uvec)
-        u::SMatrix{n_u,H,R} = reshape(uvec, Size(n_u, H))
+        u::SMatrix{n_u,H,R} = reshape(uvec, (n_u, H))
         x::SVector{n_x,R} = x0
         l_x = @SVector zeros(R, n_x)
         l_u = @SVector zeros(R, n_u)
@@ -133,7 +133,7 @@ function follow_path_optim(
     @assert Optim.converged(res) "Optim not converged: $res"
 
     uvec = Optim.minimizer(res)
-    û::SMatrix{n_u,H,ℝ} = reshape(uvec, Size(n_u, H))
+    û::SMatrix{n_u,H,ℝ} = reshape(uvec, (n_u, H))
 
     if use_warmstart
         uvec[1:end - n_u] = uvec[1 + n_u:end]
