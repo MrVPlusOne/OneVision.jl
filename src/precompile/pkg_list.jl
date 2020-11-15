@@ -9,4 +9,5 @@ pkg_list = [
     :QuadGK,
     :Unrolled,
     :Setfield,
+    :Optim,
 ]
