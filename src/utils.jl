@@ -160,6 +160,7 @@ Base.getindex(q::FixedQueue, i::Integer) = q.vec[mod1(q.head + i-1, q.len)]
 Base.getindex(q::FixedQueue, range::UnitRange) = 
     (q.vec[mod1(q.head + i-1, q.len)] for i in range)
 
+# push x to the end of the queue(stack?)
 function pushpop!(q::FixedQueue{T}, x::T)::T where T
     (q.len==0) && return x
     v = q.vec[q.head]
