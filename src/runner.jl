@@ -24,8 +24,7 @@ let
 end
 
 
-# using StatProfilerHTML
-# @profilehtml for _ in 1:1000; run_example(1:20 * t_end, freq) end
+# @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
+# run_example(1:20 * t_end, freq; noise=0.0, plot_result=false) modules=[OneVision] maxdepth=3
 
 # @benchmark run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
-

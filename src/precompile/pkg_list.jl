@@ -10,4 +10,5 @@ pkg_list = [
     :Unrolled,
     :Setfield,
     :Optim,
+    :Traceur,
 ]
