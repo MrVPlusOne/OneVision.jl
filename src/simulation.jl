@@ -88,6 +88,13 @@ function simulate(
     )
 end
 
+"""
+A sumulation implementation. It takes in information regarding the simulation and
+return `(results, logs)`.
+
+# Arguments
+
+"""
 function simulate_impl(
     world_dynamics::WorldDynamics{N},
     agents::SVector{N,AgentState{X,Z,U,Msg,Log}},
@@ -99,6 +106,7 @@ function simulate_impl(
     Each = MVector{N}
 
     xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
+    print(xs)
     result = TrajectoryData(times, N, recorder[1])
     data_idx = 1
     for t in times[1]:times[end]

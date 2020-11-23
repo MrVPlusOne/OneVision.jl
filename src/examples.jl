@@ -1,5 +1,5 @@
 module Car1DExample
-export CarX, CarZ, CarU, car_system, WallObsDynamics
+export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef
@@ -17,7 +17,6 @@ end
 struct CarU{R} <: FieldVector{1,R}
     acc::R
 end
-
 struct CarZ{R} <: FieldVector{2,R}
     detected::R
     distance::R
@@ -60,6 +59,9 @@ struct WallObsModel <: ObsDynamics end
 
 OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 
+"""
+A controller struct - holds all necessary information 
+"""
 @kwdef struct LeaderFollowerControl <: CentralControl{CarU{ℝ}}
     warm_up_time::𝕋  # Will output u=0 before this time
     k_v::ℝ = 3.0
@@ -129,19 +131,20 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
     
     H = 20
     πc = LeaderFollowerControl(warm_up_time=delays.act)
+    x_weights = fill(CarX(1.0, 1.0), N)
+    u_weights = fill(CarU(1.0), N)
     result, logs = simulate(
         world_dynamics, 
         delays,
         # NaiveCF{CarX,CarZ,CarU}(N, πc, delays.com),
-        let x_weights = fill(CarX(1.0, 1.0), 2), u_weights = fill(CarU(1.0), 2)
-            OvCF{N,CarX{ℝ},CarZ{ℝ},CarU{ℝ},H}(
-                πc, 
-                world_model, delays, x_weights, u_weights,
-                FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
-                    log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
-                end
-            )  
-        end,
+        OvCF{N,CarX{ℝ},CarZ{ℝ},CarU{ℝ},H}(
+            πc, 
+            world_model, delays, x_weights, u_weights,
+            FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
+                log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
+            end
+        )  
+        ,
         init_states,
         (comps, record_f),
         times,
