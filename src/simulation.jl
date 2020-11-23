@@ -1,4 +1,4 @@
-export simulate, TrajectoryData, visualize
+export simulate, TrajectoryData, visualize, AgentState
 
 using Plots: Plot, plot
 using StaticArrays
@@ -106,7 +106,6 @@ function simulate_impl(
     Each = MVector{N}
 
     xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
-    print(xs)
     result = TrajectoryData(times, N, recorder[1])
     data_idx = 1
     for t in times[1]:times[end]
