@@ -15,17 +15,16 @@ t_end = 30
 freq = 20.0
 
 let
-    @time plts = run_example(1:freq * t_end, freq; noise=0.0);
+    @time plts = run_example(1:freq * t_end, freq; noise=0.02);
 
     width = 500
     height = 300
     n = length(plts)
-    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin = 1cm) |> display
+    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin=1cm) |> display
 end
 
 
-# using StatProfilerHTML
-# @profilehtml for _ in 1:1000; run_example(1:20 * t_end, freq) end
+# @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
+# run_example(1:20 * t_end, freq; noise=0.0, plot_result=false) modules=[OneVision] maxdepth=3
 
-@benchmark run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
-
+# @benchmark run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)

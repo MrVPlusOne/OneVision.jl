@@ -8,12 +8,9 @@ struct ForwardPredictProblem{N,H,X,Z,U,Dy,Ctrl}
     δx::MMatrix{H,N,X}
     δz::MMatrix{H,N,Z}
 
-    """
-        ForwardPredictProblem(world_dynamics, π; H, X, Z)
-    """
     function ForwardPredictProblem(
         world_dynamics::Dy, π::Ctrl, x_zero::X, z_zero::Z; H,
-    ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}, X, Z}
+    ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U},X,Z}
         @assert isbitstype(X) "X = $X is not of bits type"
         @assert isbitstype(Z) "Z = $Z is not of bits type"
         @assert isbitstype(U) "U = $U is not of bits type"

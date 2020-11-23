@@ -56,7 +56,7 @@ sys_B(s::SysDynamicsLTI, t) = s.B
 sys_w(s::SysDynamicsLTI, t) = s.w(t)
 
 function sys_forward(dy::SysDynamicsLTI, x::X, u, t::𝕋)::X where {X}
-    (dy.A * x + dy.B * u + convert(X,dy.w(t)))
+    dy.A * x + dy.B * u + convert(X, dy.w(t))
 end
 
 """
@@ -91,7 +91,7 @@ struct DelayModel
 
     DelayModel(;obs, act, com) = begin 
         @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
-        new(obs,act,com, obs+act+com)
+        new(obs, act, com, obs + act + com)
     end
 end
 

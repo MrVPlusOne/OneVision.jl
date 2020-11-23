@@ -72,7 +72,7 @@ function follow_path_qp(
     if use_warmstart && !ismissing(p.cache[])
         x0, u0 = p.cache[]
         set_start_value.(x[1:n_x, 2:H], x0)
-        set_start_value.(u[1:n_u, 1:H-1], u0)
+        set_start_value.(u[1:n_u, 1:H - 1], u0)
     end
 
     optimize!(model)
@@ -85,11 +85,11 @@ function follow_path_qp(
     value.(u), obj
 end
 
-function x_path_from_u(x0::SVector{n_x, ℝ}, t0::𝕋, û::SMatrix{n_u, H, ℝ}, dy) where {n_x,n_u,H}
-    x̂ = MMatrix{n_x, H, ℝ}(undef)
-    x::SVector{n_x, ℝ} = x0
+function x_path_from_u(x0::SVector{n_x,ℝ}, t0::𝕋, û::SMatrix{n_u,H,ℝ}, dy) where {n_x,n_u,H}
+    x̂ = MMatrix{n_x,H,ℝ}(undef)
+    x::SVector{n_x,ℝ} = x0
     for t = 1:H
-        x = sys_forward(dy, x, û[:,t], t0+t-1)
+        x = sys_forward(dy, x, û[:,t], t0 + t - 1)
         x̂[:,t] = x
     end
     x̂
@@ -113,12 +113,12 @@ function follow_path_optim(
     n_u_H = n_u * H
     function loss(uvec)
         R = eltype(uvec)
-        u::SMatrix{n_u, H, R} = reshape(uvec, Size(n_u, H))
-        x::SVector{n_x, R} = x0
+        u::SMatrix{n_u,H,R} = reshape(uvec, (n_u, H))
+        x::SVector{n_x,R} = x0
         l_x = @SVector zeros(R, n_x)
         l_u = @SVector zeros(R, n_u)
         for t = 1:H
-            x = sys_forward(p.dy, x, u[:,t], τ+t-1)
+            x = sys_forward(p.dy, x, u[:,t], τ + t - 1)
             l_x += (x .- x_path[:, t]).^2 
             l_u += (u[:,t] .- u_path[:,t]).^2 
         end
@@ -129,14 +129,14 @@ function follow_path_optim(
 
     u0::Vector{ℝ} = (use_warmstart && !ismissing(p.cache[])) ? p.cache[] : zeros(n_u_H)
     
-    res = Optim.optimize(loss, u0, Optim.LBFGS(); autodiff = :forward)
+    res = Optim.optimize(loss, u0, Optim.LBFGS(); autodiff=:forward)
     @assert Optim.converged(res) "Optim not converged: $res"
 
     uvec = Optim.minimizer(res)
-    û::SMatrix{n_u, H, ℝ} = reshape(uvec, Size(n_u,H))
+    û::SMatrix{n_u,H,ℝ} = reshape(uvec, (n_u, H))
 
     if use_warmstart
-        uvec[1:end-n_u] = uvec[1+n_u:end]
+        uvec[1:end - n_u] = uvec[1 + n_u:end]
         p.cache[] = uvec
     end
 
