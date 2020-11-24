@@ -30,9 +30,6 @@ end
     ψ̂::R = 0.0
 end
 
-ψ_from_v_ω(v, ω, l) = atan(ω * l, v)
-ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
-
 struct CarZ{R} <: FieldVector{0,R} end
 
 # TODO: fine-tune these parameters
@@ -53,13 +50,22 @@ struct CarZ{R} <: FieldVector{0,R} end
     k_ψ::ℝ = 5.0
 end
 
+ψ_from_v_ω(v, ω, l) = atan(ω * l, v)
+ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
+
+function u_from_v_ω(v, ω, dy::CarDynamics)
+    v = clamp(v, -dy.max_v, dy.max_v)
+    ψ = ψ_from_v_ω(v, ω, dy.l)
+    ψ = clamp(ψ, -dy.max_ψ, dy.max_ψ)
+    CarU(v, ψ)
+end
+
 function limit_control(dy::CarDynamics, u::CarU)
     u1 = CarU(
         v̂ = clamp(u.v̂, -dy.max_v, dy.max_v),
         ψ̂ = clamp(u.ψ̂, -dy.max_ψ, dy.max_ψ),
     )
     u1 == u ? u : u1
-    # u
 end
 
 @inline function sys_derivates(dy::CarDynamics, x::CarX, u::CarU)
@@ -108,19 +114,27 @@ function ref_point(K::RefPointTrackControl, s::CarX)
     SVector(x, y)
 end
 
+function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
+    d = K.ref_pos
+    v, θ = ŝ.v, ŝ.θ
+    ω = ω_from_v_ψ(v, ŝ.ψ, K.dy.l)
+    v̂_x = v * cos(θ) - sin(θ) * ω * d
+    v̂_y = v * sin(θ) + cos(θ) * ω * d
+    SVector(v̂_x, v̂_y)
+end
+
 function track_ref(
     K::RefPointTrackControl, ŝ::CarX{R}, s::CarX{R}
 )::CarU{R} where R
     # compute the difference of the reference points, then apply propotional control
     p, p̂ = ref_point.(Ref(K), (s, ŝ))
-    ṗ = K.k * (p̂ - p)
+    ṗ = K.k * (p̂ - p) + ref_point_v(K, ŝ)
     # convert `ṗ` back into the control `CarU`
     d = K.ref_pos
     θ = s.θ
     v = cos(θ) * ṗ[1] + sin(θ) * ṗ[2]
     ω = -sin(θ) / d * ṗ[1] + cos(θ) / d * ṗ[2]
-    ψ = ψ_from_v_ω(v, ω, K.dy.l)
-    limit_control(K.dy, CarU(v, ψ))
+    u_from_v_ω(v, ω, K.dy)
 end
 
 
@@ -150,8 +164,7 @@ function track_ref(
     ta = tan(θ_e)
     v̂ = (v_d - K.k1 * abs(v_d) * (x_e + y_e * ta)) / co
     ŵ = w_d - (K.k2 * v_d * y_e + K.k3 * abs(v_d) * ta) * co * co
-    ψ̂ = ψ_from_v_ω(x.v, ŵ, K.dy.l)
-    limit_control(K.dy, CarU(v̂, ψ̂))
+    u_from_v_ω(v̂, ŵ, K.dy)
 end
 
 struct RefTrackCentralControl{TC <: TrackingControl} <: CentralControl{CarU{ℝ}}
@@ -177,8 +190,8 @@ function circular_traj(dy::CarDynamics, x0, u0, t_end::𝕋)::Vector{CarX{ℝ}}
     out
 end
 
-function car_triangle(x,y,θ; len = 0.1, width = 0.02)
-    base = Point2f0(x,y)
+function car_triangle(x, y, θ; len = 0.1, width = 0.02)
+    base = Point2f0(x, y)
     dir = Point2f0(cos(θ), sin(θ))
     left = Point2f0(sin(θ), -cos(θ))
     p1 = base + dir * len
@@ -214,29 +227,32 @@ function plot_cars(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{ℝ}})
     ref_car = @lift let c = ref_traj[$t] 
         car_triangle(c.x, c.y, c.θ)
     end
-    poly!(ax_traj, car; color=:red)
-    poly!(ax_traj, ref_car; color=:green)
+    poly!(ax_traj, car; color = :red)
+    poly!(ax_traj, ref_car; color = :green)
 
     scene
 end
 
 function run_example(;freq = 20.0, time_end = 20.0)
     X, Z, U = CarX{ℝ}, CarZ{ℝ}, CarU{ℝ}
-
-    dy = CarDynamics(delta_t = 1 / freq)
-    z_dy = CarObsDynamics()
     t_end = 𝕋(ceil(time_end * freq))
+
+    # Car dynamics parameters
+    dy = CarDynamics(delta_t = 1 / freq, max_ψ = 60°)
+    z_dy = CarObsDynamics()
+
+    # reference trajectory to track
     x_ref0 = X(x = 0, y = -0.5, θ = 0.0)
     u_ref0 = U(v̂ = 0.5, ψ̂ = 0.1pi)
     circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1)
 
-    # RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 3.0)
-    RefK = TrajectoryTrackControl(;dy, k1=10, k2=1,k3=1)
+    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 1.0)
+    # RefK = TrajectoryTrackControl(;dy, k1=2, k2=1,k3=1)
     central = RefTrackCentralControl(RefK, reshape(circ_traj, 1, :))
 
     N = 1
-    world = WorldDynamics([(dy, z_dy)])
     delay_model = DelayModel(obs = 0, act = 0, com = 1)
+    world = WorldDynamics([(dy, z_dy)])
     framework = NaiveCF{X,Z,U}(N, central, delay_model.com)
     init = let x0 = X(x = 0, y = 0, θ = 0), z0 = Z(), u0 = U()
         [(x0, z0, u0)]
@@ -245,13 +261,11 @@ function run_example(;freq = 20.0, time_end = 20.0)
     function record_f(xs, zs, us)
         [(x -> x.x).(xs) (x -> x.y).(xs) (x -> x.θ).(xs) (x -> x.ψ).(xs)]
     end
-    times = 1:t_end
 
     result, logs = simulate(
-        world, delay_model, framework, init, (comps, record_f), times)
+        world, delay_model, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     plot_cars(result, freq, circ_traj) |> display
 end
-
 
 end  # module Car2DExamples
