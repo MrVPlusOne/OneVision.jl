@@ -8,6 +8,7 @@ include("simulation.jl")
 include("path_following.jl")
 include("forward_prediction.jl")
 include("frameworks/frameworks.jl")
-include("examples.jl")
+include("examples/Car1DExample.jl")
+include("examples/Car2DExamples.jl")
 
 end # OneVision

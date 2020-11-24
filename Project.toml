@@ -4,10 +4,14 @@ authors = ["Jiayi Wei <wjydzh1@gmail.com> and contributors"]
 version = "0.1.0"
 
 [deps]
+AbstractPlotting = "537997a7-5e4e-5d89-9595-2241ea00577e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+MakieGallery = "dbd62bd0-c9f5-5087-a2e1-f5c4bb0cec90"
 MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 Measures = "442fdcdd-2543-5da2-b0f3-8c86c306513e"
 MutableArithmetics = "d8a4904e-b15c-11e9-3269-09a3773c0cb0"

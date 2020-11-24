@@ -1,5 +1,6 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT
 export FixedQueue, pushpop!, constant_queue
+export integrate_Euler
 
 export @kwdef
 
@@ -173,3 +174,26 @@ function Base.show(io::IO, q::FixedQueue)
     print(io, "FixedQueue(len=$(q.len), queue=$seq)")
 end
     
+"""
+Numerical integration using Euler's method.
+"""
+function integrate_Euler(f, x0::X, t0::AbstractFloat, dt::AbstractFloat, N) where X
+    x::X = x0
+    t = t0
+    for _ in 1:N
+        x += (f(x, t)::X) * dt
+        t += dt
+    end
+    x
+end
+
+"""
+Numerical integration using Euler's method with a time-invariant dynamics.
+"""
+function integrate_Euler(f, x0::X, dt::AbstractFloat, N) where X
+    x::X = x0
+    for _ in 1:N
+        x += (f(x)::X) * dt
+    end
+    x
+end

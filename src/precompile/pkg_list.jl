@@ -11,4 +11,5 @@ pkg_list = [
     :Setfield,
     :Optim,
     :Traceur,
+    :Makie,
 ]

@@ -4,17 +4,24 @@ using Plots: Plot, plot
 using StaticArrays
 using Unrolled
 
-"Results are indexed by (time, agent, component)"
 @kwdef struct TrajectoryData
     times::Vector{𝕋}
+    "values are indexed by (time, agent, component)"
     values::Array{ℝ,3}
     components::Vector{String}
+    function TrajectoryData(times::AbstractVector{𝕋}, num_agents::ℕ, components::Vector{String})
+        values = Array{ℝ}(undef, length(times), num_agents, length(components))
+        new(times, values, components) 
+    end
 end
 
-TrajectoryData(times::Vector{𝕋}, num_agents::ℕ, components::Vector{String}) = begin
-    values = Array{ℝ}(undef, length(times), num_agents, length(components))
-    TrajectoryData(times, values, components) 
+function Base.getindex(data::TrajectoryData, comp::String)
+    c_id = indexin([comp],data.components)[1]
+    @assert c_id !== nothing "component '$comp' not found."
+    data.values[:,:,(c_id::Int)]
 end
+
+
 
 "A generic result visualization function that draws multiple line plots, 
 one for each component of the state vector.\n"
@@ -65,7 +72,7 @@ function simulate(
     framework::ControllerFramework{X,Z,U,Msg,Log},
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},
-    times::Vector{𝕋},
+    times::AbstractVector{𝕋},
 )::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
     (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
     
@@ -96,6 +103,7 @@ function simulate_impl(
     times,
 ) where {X,Z,U,Msg,Log,RF,N}
     @assert !isempty(times)
+    @assert isbitstype(Msg) "Msg = $Msg"
     Each = MVector{N}
 
     xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})

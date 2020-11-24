@@ -71,12 +71,12 @@ end
 OneVision.control_one(
     lf::LeaderFollowerControl, xs,zs, t::𝕋, id::ℕ
 )::CarU{ℝ} = begin
-    tol = 0.5
+    tol = 1.0
     function bang_bang(x̂, x, k, tol)
         if abs(x̂ - x) ≤ tol
             (x̂ - x) * k
         else
-            sign(x̂ - x) * 3
+            sign(x̂ - x) * tol * k
         end
     end
     

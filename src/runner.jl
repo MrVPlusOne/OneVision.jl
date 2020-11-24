@@ -1,28 +1,21 @@
 if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
     include("OneVision.jl")
     # using .OneVision
-    using .OneVision.Car1DExample: run_example
+    using .OneVision.Car2DExamples: run_example, plot_cars
 else
     # using OneVision
-    using OneVision.Car1DExample: run_example
+    using OneVision.Car2DExamples: run_example, plot_cars
 end
 
 using BenchmarkTools: @benchmark
-using Plots, Measures
-plotlyjs()
+import AbstractPlotting
+AbstractPlotting.__init__()
 
-t_end = 30
-freq = 20.0
+# using Plots, Measures
+# plotlyjs()
 
-let
-    @time plts = run_example(1:freq * t_end, freq; noise=0.02);
 
-    width = 500
-    height = 300
-    n = length(plts)
-    plot(plts...;layout=(n, 1), size=(width, height * n), bottom_margin=1cm) |> display
-end
-
+run_example()
 
 # @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
 # run_example(1:20 * t_end, freq; noise=0.0, plot_result=false) modules=[OneVision] maxdepth=3
