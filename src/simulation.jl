@@ -1,6 +1,8 @@
 export simulate, TrajectoryData, visualize, AgentState
 
-using Plots: Plot, plot
+# using Plots: Plot, plot
+using Makie
+using AbstractPlotting.MakieLayout
 using StaticArrays
 using Unrolled
 
@@ -27,7 +29,7 @@ end
 one for each component of the state vector.\n"
 function visualize(
     result::TrajectoryData; delta_t=nothing
-)::Vector{Plot}
+)::Scene
     if delta_t === nothing
         times = result.times
         xlabel = "time step"
@@ -37,10 +39,18 @@ function visualize(
     end
     ## currently assume all agents have the same type of states and observations
     labels = reshape(["agent $i" for i in 1:size(result.values, 2)], (1, :))
-    map(enumerate(result.components)) do (c_id, comp)
+    n = length(result.components)
+    scene, layout = layoutscene(resolution=(1200, 500*n))
+    axes = map(enumerate(result.components)) do (c_id, comp)
+        ax = LAxis(scene; title=comp, xlabel)
         ys = result.values[:,:,c_id]
-        plot(times, ys; title=comp, label=labels, xlabel)
+        for j in 1:size(ys,2)
+            lines!(ax, times, ys[:,j])
+        end
+        layout[c_id,1] = ax
     end
+    linkxaxes!(axes...)
+    scene
 end
 
         

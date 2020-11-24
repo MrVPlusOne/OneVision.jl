@@ -1,4 +1,4 @@
-export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT
+export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue
 export integrate_Euler
 
@@ -198,3 +198,10 @@ function integrate_Euler(f, x0::X, dt::AbstractFloat, N) where X
     end
     x
 end
+
+"""
+    f <| x = f(x)
+"""
+<|(f, x) = f(x)
+
+° = pi/180

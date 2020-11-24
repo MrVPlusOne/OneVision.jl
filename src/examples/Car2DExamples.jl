@@ -1,10 +1,11 @@
 module Car2DExamples
 
 using OneVision
-using OneVision: ℝ, 𝕋, ℕ, @kwdef
+using OneVision: ℝ, 𝕋, ℕ, @kwdef, °
 using Random
 using StaticArrays
 # using Plots
+# using Measures: cm
 using AbstractPlotting
 using Makie
 using AbstractPlotting.MakieLayout
@@ -29,7 +30,7 @@ end
     ψ̂::R = 0.0
 end
 
-ψ_from_v_ω(v, ω, l) = atan(v, ω * l)
+ψ_from_v_ω(v, ω, l) = atan(ω * l, v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 struct CarZ{R} <: FieldVector{0,R} end
@@ -43,7 +44,7 @@ struct CarZ{R} <: FieldVector{0,R} end
     "maximal linear speed"
     max_v::ℝ = 5.0
     "maximal steering angle"
-    max_ψ::ℝ = 1pi / 3
+    max_ψ::ℝ = 60°
     "wheelbase between the front and rear wheels"
     l::ℝ = 0.1
     "rate of convergence for v to converge to v̂"
@@ -58,6 +59,7 @@ function limit_control(dy::CarDynamics, u::CarU)
         ψ̂ = clamp(u.ψ̂, -dy.max_ψ, dy.max_ψ),
     )
     u1 == u ? u : u1
+    # u
 end
 
 @inline function sys_derivates(dy::CarDynamics, x::CarX, u::CarU)
@@ -85,8 +87,13 @@ function OneVision.obs_forward(
     dy::CarObsDynamics, x::CarX, z::CarZ, t::𝕋
 ) z end
 
+"""
+Should implement `track_ref`.
+"""
+abstract type TrackingControl end
 
-@kwdef struct RefPointTrackControl
+
+@kwdef struct RefPointTrackControl <: TrackingControl
     dy::CarDynamics
     "The distance between the reference point and rear axis, positive means forward"
     ref_pos::ℝ
@@ -101,7 +108,7 @@ function ref_point(K::RefPointTrackControl, s::CarX)
     SVector(x, y)
 end
 
-function ref_point_track_control(
+function track_ref(
     K::RefPointTrackControl, ŝ::CarX{R}, s::CarX{R}
 )::CarU{R} where R
     # compute the difference of the reference points, then apply propotional control
@@ -117,7 +124,7 @@ function ref_point_track_control(
 end
 
 
-@kwdef struct TrajectoryTrackControl
+@kwdef struct TrajectoryTrackControl <: TrackingControl
     dy::CarDynamics
     k1::ℝ
     k2::ℝ
@@ -128,7 +135,7 @@ end
 """
 Full configuration tracking control for a 2D Car.
 """
-function config_track_control(
+function track_ref(
     K::TrajectoryTrackControl, x̂::CarX{R}, x::CarX{R}
 )::CarU{R} where R 
     θ_d, x_d, y_d, v_d = x̂.θ, x̂.x, x̂.y, x̂.v
@@ -139,55 +146,56 @@ function config_track_control(
     x_e =  cos(θ_d) * Δx + sin(θ_d) * Δy
     y_e = -sin(θ_d) * Δx + cos(θ_d) * Δy
     
-    co = cos(θ_e), ta = tan(θ_e)
+    co = cos(θ_e) 
+    ta = tan(θ_e)
+    v̂ = (v_d - K.k1 * abs(v_d) * (x_e + y_e * ta)) / co
     ŵ = w_d - (K.k2 * v_d * y_e + K.k3 * abs(v_d) * ta) * co * co
     ψ̂ = ψ_from_v_ω(x.v, ŵ, K.dy.l)
-    v̂ = (v_d - K.k1 * abs(v_d) * (x_e + y_e * ta)) / co
     limit_control(K.dy, CarU(v̂, ψ̂))
 end
 
-struct CentralRefPointTrackControl <: CentralControl{CarU{ℝ}}
-    K::RefPointTrackControl
+struct RefTrackCentralControl{TC <: TrackingControl} <: CentralControl{CarU{ℝ}}
+    K::TC
     trajectories::Matrix{CarX{ℝ}}  # index by (agent, time)
 end
 
 function OneVision.control_one(
-    ctrl::CentralRefPointTrackControl, xs,zs, t::𝕋, id::ℕ
+    ctrl::RefTrackCentralControl, xs,zs, t::𝕋, id::ℕ
 )
     x = xs[id]
     x̂ = ctrl.trajectories[id,t]
-    ref_point_track_control(ctrl.K, x̂, x)
+    track_ref(ctrl.K, x̂, x)
 end
 
 function circular_traj(dy::CarDynamics, x0, u0, t_end::𝕋)::Vector{CarX{ℝ}}
     x::CarX{ℝ} = x0
     out = Vector{CarX{ℝ}}(undef, t_end)
-    for t in 0:t_end - 1
+    for t in 1:t_end
+        out[t] = x
         x = sys_forward(dy, x, u0, t)
-        out[t + 1] = x
     end
     out
 end
 
-function plot_cars(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{ℝ}})
-    function car_triangle(x,y,θ; len = 0.1, width = 0.02)
-        base = Point2f0(x,y)
-        dir = Point2f0(cos(θ), sin(θ))
-        left = Point2f0(sin(θ), -cos(θ))
-        p1 = base + dir * len
-        p2 = base + left * width
-        p3 = base - left * width
-        [p1,p2,p3]
-    end
+function car_triangle(x,y,θ; len = 0.1, width = 0.02)
+    base = Point2f0(x,y)
+    dir = Point2f0(cos(θ), sin(θ))
+    left = Point2f0(sin(θ), -cos(θ))
+    p1 = base + dir * len
+    p2 = base + left * width
+    p3 = base - left * width
+    [p1,p2,p3]
+end
 
-    AbstractPlotting.inline!(false)
+function plot_cars(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{ℝ}})
     scene, layout = layoutscene(resolution = (1600, 1600))
-    scene
 
     xs, ys = data["x"][:,1], data["y"][:,1]
     θs = data["θ"][:,1]
 
-    ax_traj = layout[1,1] = LAxis(scene, title = "Trajectories", aspect = DataAspect())
+    ax_traj = layout[1,1] = LAxis(
+        scene, title = "Trajectories", aspect = DataAspect(), 
+        backgroundcolor = RGBf0(0.98, 0.98, 0.98))
     ref_plot = let 
         local xs = (p -> p.x).(ref_traj)
         local ys = (p -> p.y).(ref_traj)
@@ -219,11 +227,12 @@ function run_example(;freq = 20.0, time_end = 20.0)
     z_dy = CarObsDynamics()
     t_end = 𝕋(ceil(time_end * freq))
     x_ref0 = X(x = 0, y = -0.5, θ = 0.0)
-    u_ref0 = U(v̂ = 1, ψ̂ = 0.1pi)
+    u_ref0 = U(v̂ = 0.5, ψ̂ = 0.1pi)
     circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1)
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 1.0)
-    central = CentralRefPointTrackControl(RefK, reshape(circ_traj, 1, :))
+    # RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 3.0)
+    RefK = TrajectoryTrackControl(;dy, k1=10, k2=1,k3=1)
+    central = RefTrackCentralControl(RefK, reshape(circ_traj, 1, :))
 
     N = 1
     world = WorldDynamics([(dy, z_dy)])
@@ -238,10 +247,10 @@ function run_example(;freq = 20.0, time_end = 20.0)
     end
     times = 1:t_end
 
-    result, logs = simulate(world, delay_model, framework, init, (comps, record_f), times)
-    # visualize(result; delta_t = 1 / freq)
-    # result
-    plot_cars(result, freq, circ_traj)
+    result, logs = simulate(
+        world, delay_model, framework, init, (comps, record_f), times)
+    # visualize(result; delta_t = 1 / freq) |> display
+    plot_cars(result, freq, circ_traj) |> display
 end
 
 

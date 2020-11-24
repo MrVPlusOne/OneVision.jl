@@ -10,12 +10,12 @@ end
 using BenchmarkTools: @benchmark
 import AbstractPlotting
 AbstractPlotting.__init__()
+AbstractPlotting.inline!(false)
 
 # using Plots, Measures
 # plotlyjs()
 
-
-run_example()
+run_example(time_end=20)
 
 # @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
 # run_example(1:20 * t_end, freq; noise=0.0, plot_result=false) modules=[OneVision] maxdepth=3

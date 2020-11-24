@@ -41,7 +41,7 @@ function OneVision.make_controllers(
     init_t::𝕋,
 ) where {X,Z,U}
     ctrls = ntuple(framework.num_agents) do i
-        NaiveController{X,Z,U}(i, framework.central, init_t)
+        NaiveController{X,Z,U}(i, framework.central, init_t-1)
     end
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]
