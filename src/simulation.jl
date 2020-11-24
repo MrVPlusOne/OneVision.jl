@@ -1,4 +1,4 @@
-export simulate, TrajectoryData, visualize
+export simulate, TrajectoryData, visualize, AgentState
 
 using Plots: Plot, plot
 using StaticArrays
@@ -95,6 +95,13 @@ function simulate(
     )
 end
 
+"""
+A sumulation implementation. It takes in information regarding the simulation and
+return `(results, logs)`.
+
+# Arguments
+
+"""
 function simulate_impl(
     world_dynamics::WorldDynamics{N},
     agents::SVector{N,AgentState{X,Z,U,Msg,Log}},
@@ -126,6 +133,52 @@ function simulate_impl(
             a = agents[i]
             pushpop!(a.msg_queue, convert(Vector{Msg}, transmition[i,:]))
             xs[i] = sys_forward(world_dynamics.dynamics[i], xs[i], us[i], t)
+            zs[i] = obs_forward(world_dynamics.obs_dynamics[i], xs[i], zs[i], t)
+        end
+        # record results
+        if t == times[data_idx]
+            data = recorder[2](xs, zs, us)
+            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
+               * "return a matrix of size (N * Num curves), got size $(size(data))")
+            result.values[data_idx, :, :] = data
+            data_idx += 1
+        end
+    end
+    logs = Dict(i => write_logs(agents[i].controller) for i in 1:N)
+    result, logs
+end
+
+
+function ros_simulate_impl(
+    world_dynamics::WorldDynamics{N},
+    agents::SVector{N,AgentState{X,Z,U,Msg,Log}},
+    init_status::SVector{N,Tuple{X,Z,U}},
+    recorder::Tuple{Vector{String},RF},
+    times,
+) where {X,Z,U,Msg,Log,RF,N}
+    @assert !isempty(times)
+    Each = MVector{N}
+
+    xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
+    result = TrajectoryData(times, N, recorder[1])
+    data_idx = 1
+    for t in times[1]:times[end]
+        # observe, control, and send messages
+        transmition = MMatrix{N,N,Msg}(undef)  # indexed by (receiver, sender)
+        for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
+            a = agents[i]
+            x = pushpop!(a.state_queue, xs[i])
+            z = pushpop!(a.obs_queue, zs[i])
+            ms = first(a.msg_queue)
+            u, ms′ = control!(a.controller, x, z, ms)
+            us[i] = pushpop!(a.act_queue, u)
+            transmition[:,i] = ms′
+        end
+        # receive messagees and update world states
+        for i in 1:length(agents)
+            a = agents[i]
+            pushpop!(a.msg_queue, convert(Vector{Msg}, transmition[i,:]))
+            xs[i] = # needs to be obtained from ROS 
             zs[i] = obs_forward(world_dynamics.obs_dynamics[i], xs[i], zs[i], t)
         end
         # record results
