@@ -126,14 +126,15 @@ end
 function track_ref(
     K::RefPointTrackControl, ŝ::CarX{R}, s::CarX{R}
 )::CarU{R} where R
-    # compute the difference of the reference points, then apply propotional control
-    p, p̂ = ref_point.(Ref(K), (s, ŝ))
-    ṗ = K.k * (p̂ - p) + ref_point_v(K, ŝ)
-    # convert `ṗ` back into the control `CarU`
+    # compute the desired ref point velocity
+    p, p̂ = ref_point(K, s), ref_point(K, ŝ)
+    v_p̂ = ref_point_v(K, ŝ)
+    v_p = v_p̂ + K.k * (p̂ - p)
+    # convert `v_p` back into the control `CarU`
     d = K.ref_pos
     θ = s.θ
-    v = cos(θ) * ṗ[1] + sin(θ) * ṗ[2]
-    ω = -sin(θ) / d * ṗ[1] + cos(θ) / d * ṗ[2]
+    v = cos(θ) * v_p[1] + sin(θ) * v_p[2]
+    ω = -sin(θ) / d * v_p[1] + cos(θ) / d * v_p[2]
     u_from_v_ω(v, ω, K.dy)
 end
 
@@ -246,15 +247,15 @@ function run_example(;freq = 20.0, time_end = 20.0)
     u_ref0 = U(v̂ = 0.5, ψ̂ = 0.1pi)
     circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1)
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 1.0)
-    # RefK = TrajectoryTrackControl(;dy, k1=2, k2=1,k3=1)
+    # RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 1.0)
+    RefK = TrajectoryTrackControl(;dy, k1 = 2, k2 = 1,k3 = 1)
     central = RefTrackCentralControl(RefK, reshape(circ_traj, 1, :))
 
     N = 1
     delay_model = DelayModel(obs = 0, act = 0, com = 1)
     world = WorldDynamics([(dy, z_dy)])
     framework = NaiveCF{X,Z,U}(N, central, delay_model.com)
-    init = let x0 = X(x = 0, y = 0, θ = 0), z0 = Z(), u0 = U()
+    init = let x0 = X(x = 0, y = 0, θ = pi), z0 = Z(), u0 = U()
         [(x0, z0, u0)]
     end 
     comps = ["x", "y", "θ", "ψ"]

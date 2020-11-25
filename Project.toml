@@ -1,12 +1,13 @@
 name = "OneVision"
 uuid = "f237c6c4-064b-4cc0-8939-eac982d56a72"
-authors = ["Jiayi Wei <wjydzh1@gmail.com> and contributors"]
+authors = ["Jiayi Wei <wjydzh1@gmail.com>, Tongrui Li and contributors"]
 version = "0.1.0"
 
 [deps]
 AbstractPlotting = "537997a7-5e4e-5d89-9595-2241ea00577e"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 GLMakie = "e9467ef8-e4e7-5192-8a1a-b1aee30e663a"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"

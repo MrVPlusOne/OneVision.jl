@@ -1,5 +1,8 @@
+using DrWatson
+@quickactivate "OneVision"
+
 if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
-    include("OneVision.jl")
+    include("../src/OneVision.jl")
     # using .OneVision
     using .OneVision.Car2DExamples: run_example, plot_cars
 else
