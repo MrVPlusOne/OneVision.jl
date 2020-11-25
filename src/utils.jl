@@ -175,28 +175,65 @@ function Base.show(io::IO, q::FixedQueue)
     print(io, "FixedQueue(len=$(q.len), queue=$seq)")
 end
     
-"""
-Numerical integration using Euler's method.
-"""
-function integrate_Euler(f, x0::X, t0::AbstractFloat, dt::AbstractFloat, N) where X
-    x::X = x0
-    t = t0
-    for _ in 1:N
-        x += (f(x, t)::X) * dt
-        t += dt
-    end
-    x
-end
 
-"""
-Numerical integration using Euler's method with a time-invariant dynamics.
-"""
-function integrate_Euler(f, x0::X, dt::AbstractFloat, N) where X
-    x::X = x0
-    for _ in 1:N
-        x += (f(x)::X) * dt
+module NumericalIntegration
+    export integrate_forward, integrate_forward_invariant
+    export Euler, RK38
+
+    """
+    Numerical integration for differential equation systems.
+    """
+    function integrate_forward(f, x0::X, tspan::Tuple{T,T}, method, N) where {X,T}
+        t0, t1 = tspan
+        dt = (t1 - t0)/N
+        x::X = x0
+        t::T = t0
+        for _ in 1:N
+            x += method(f, x, dt, t)
+            t += dt
+        end
+        x
     end
-    x
+
+    """
+    Numerical integration for time-invariant differential equation systems.
+    """
+    function integrate_forward_invariant(f, x0::X, dt::AbstractFloat, method, N) where {X}
+        x::X = x0
+        for _ in 1:N
+            x += method(f, x, dt)
+        end
+        x
+    end
+
+
+    function Euler(f, x::X, dt::AbstractFloat)::X where X
+        f(x)::X * dt
+    end
+
+    function Euler(f, x::X, dt::AbstractFloat, t)::X where X
+        f(x, t)::X * dt
+    end
+
+    """
+    Runge–Kutta 3/8 rule. (4th order method)
+    """
+    function RK38(f, x::X, dt::AbstractFloat)::X where X
+        k1 = f(x)::X
+        k2 = f(x+(1/3)k1*dt)::X
+        k3 = f(x+dt*((-1/3)k1+k2))::X
+        k4 = f(x+dt*(k1-k2+k3))::X
+        dt * ((1/8)k1 + (3/8)k2 + (3/8)k3 + (1/8)k4)
+    end
+
+    function RK38(f, x::X, dt::AbstractFloat, t)::X where X
+        k1 = f(x, t)::X
+        k2 = f(x+(1/3)k1*dt, t+(1/3)dt)::X
+        k3 = f(x+dt*((-1/3)k1+k2), t+(2/3)dt)::X
+        k4 = f(x+dt*(k1-k2+k3), t+dt)::X
+        dt * ((1/8)k1 + (3/8)k2 + (3/8)k3 + (1/8)k4)
+    end
+
 end
 
 """

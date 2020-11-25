@@ -9,6 +9,8 @@ using StaticArrays
 using AbstractPlotting
 using Makie
 using AbstractPlotting.MakieLayout
+using Parameters
+using OneVision.NumericalIntegration
 
 @kwdef struct CarX{R} <: FieldVector{5,R}
     "x position"
@@ -36,8 +38,6 @@ struct CarZ{R} <: FieldVector{0,R} end
 @kwdef struct CarDynamics <: SysDynamics
     "control time interval in seconds"
     delta_t::ℝ
-    "numerical integration number of samples"
-    int_samples::ℕ = 10
     "maximal linear speed"
     max_v::ℝ = 5.0
     "maximal steering angle"
@@ -80,13 +80,14 @@ end
 
 struct CarObsDynamics <: ObsDynamics end
 
-function OneVision.sys_forward(dy::CarDynamics, x::CarX, u::CarU, t::𝕋)
+function OneVision.sys_forward(dy::CarDynamics, x::CarX{R}, u::CarU, t::𝕋) where R
     u = limit_control(dy, u)
 
-    N = dy.int_samples 
+    N = 1
     dt = dy.delta_t / N
     f(x) = sys_derivates(dy, x, u)
-    integrate_Euler(f, x, dt, N)
+
+    integrate_forward_invariant(f, x, dt, RK38, N)
 end
 
 function OneVision.obs_forward(
@@ -116,8 +117,8 @@ end
 
 function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
     d = K.ref_pos
-    v, θ = ŝ.v, ŝ.θ
-    ω = ω_from_v_ψ(v, ŝ.ψ, K.dy.l)
+    @unpack v, θ, ψ = ŝ
+    ω = ω_from_v_ψ(v, ψ, K.dy.l)
     v̂_x = v * cos(θ) - sin(θ) * ω * d
     v̂_y = v * sin(θ) + cos(θ) * ω * d
     SVector(v̂_x, v̂_y)
@@ -234,7 +235,7 @@ function plot_cars(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{ℝ}})
     scene
 end
 
-function run_example(;freq = 20.0, time_end = 20.0)
+function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     X, Z, U = CarX{ℝ}, CarZ{ℝ}, CarU{ℝ}
     t_end = 𝕋(ceil(time_end * freq))
 
@@ -266,7 +267,10 @@ function run_example(;freq = 20.0, time_end = 20.0)
     result, logs = simulate(
         world, delay_model, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
-    plot_cars(result, freq, circ_traj) |> display
+    if plot_result
+        plot_cars(result, freq, circ_traj) |> display
+    end
+    result, logs
 end
 
 end  # module Car2DExamples

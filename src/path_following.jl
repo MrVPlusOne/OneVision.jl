@@ -3,14 +3,17 @@ export PathFollowingProblem, follow_path_optim, follow_path_qp, x_path_from_u
 
 using OneVision: ℝ, 𝕋
 using OneVision
+using Random, LinearAlgebra
+using StaticArrays
+import Optim
+
+# dependencies to be removed
 using JuMP
 import OSQP
 # import COSMO
 using MathOptInterface: AbstractOptimizer
-using Random, LinearAlgebra
-using StaticArrays
 import MutableArithmetics
-import Optim
+# end dependencies to be removed
 
 struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamics}
     horizon::Val{H}

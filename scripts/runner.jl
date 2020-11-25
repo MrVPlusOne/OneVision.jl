@@ -23,4 +23,4 @@ run_example(time_end=20)
 # @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
 # run_example(1:20 * t_end, freq; noise=0.0, plot_result=false) modules=[OneVision] maxdepth=3
 
-# @benchmark run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
+# @benchmark run_example(time_end=20, plot_result=false)
