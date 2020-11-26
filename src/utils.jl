@@ -182,7 +182,7 @@ module NumericalIntegration
     """
     Numerical integration for differential equation systems.
     """
-    function integrate_forward(f, x0::X, tspan::Tuple{T,T}, method, N) where {X,T}
+    @inline function integrate_forward(f, x0::X, tspan::Tuple{T,T}, method, N) where {X,T}
         t0, t1 = tspan
         dt = (t1 - t0)/N
         x::X = x0
@@ -197,7 +197,7 @@ module NumericalIntegration
     """
     Numerical integration for time-invariant differential equation systems.
     """
-    function integrate_forward_invariant(f, x0::X, dt::AbstractFloat, method, N) where {X}
+    @inline function integrate_forward_invariant(f, x0::X, dt::AbstractFloat, method, N) where {X}
         x::X = x0
         for _ in 1:N
             x += method(f, x, dt)

@@ -48,16 +48,16 @@ function u_from_v_ω(v, ω, dy::CarDynamics)
     CarU(v, ψ)
 end
 
-function limit_control(dy::CarDynamics, u::CarU)
-    u1 = CarU(
+function limit_control(dy::CarDynamics, u::CarU{R}) where R
+    u1 = CarU{R}(
         v̂ = clamp(u.v̂, -dy.max_v, dy.max_v),
         ψ̂ = clamp(u.ψ̂, -dy.max_ψ, dy.max_ψ),
     )
     u1 == u ? u : u1
 end
 
-@inline function sys_derivates(dy::CarDynamics, x::CarX, u::CarU)
-    CarX(
+@inline function sys_derivates(dy::CarDynamics, x::CarX{R}, u::CarU) where R
+    CarX{R}(
         x = cos(x.θ) * x.v,
         y = sin(x.θ) * x.v,
         θ = ω_from_v_ψ(x.v, x.ψ, dy.l),

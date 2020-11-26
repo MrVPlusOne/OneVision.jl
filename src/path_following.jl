@@ -6,6 +6,7 @@ using OneVision
 using Random, LinearAlgebra
 using StaticArrays
 import Optim
+using Zygote
 
 # dependencies to be removed
 using JuMP
@@ -130,11 +131,18 @@ function follow_path_optim(
         sum(l_x .* p.x_weights) + sum(l_u .* p.u_weights)
     end
 
+    function fg!(F, G, x)
+        @assert F !== nothing
+        @assert G !== nothing
+        y, grad = pullback(loss, x)
+        copyto!(G, grad(one(y)))
+    end
+
     use_warmstart = true
 
     u0::Vector{ℝ} = (use_warmstart && !ismissing(p.cache[])) ? p.cache[] : zeros(n_u_H)
     
-    res = Optim.optimize(loss, u0, Optim.LBFGS(),
+    res = Optim.optimize(Optim.only_fg!(fg!), u0, Optim.LBFGS(),
         Optim.Options(
             x_abstol = p.u_tol,
             f_abstol = p.loss_tol,

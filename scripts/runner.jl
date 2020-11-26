@@ -18,10 +18,11 @@ AbstractPlotting.inline!(false)
 # using Plots, Measures
 # plotlyjs()
 
-run_example(time_end=20)
+run_example(time_end=20, plot_result=false)
 
 import OneVision.Car1DExample
 @benchmark Car1DExample.run_example(1:20 * 20, 20.0; noise=0.0, plot_result=false)
+@benchmark run_example(time_end=20, plot_result=false)
 @benchmark run_example(time_end=20, plot_result=false)
 
 # @profview run_example(1:20 * t_end, freq; noise=0.0, plot_result=false)
