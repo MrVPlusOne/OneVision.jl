@@ -23,13 +23,17 @@ end
 """
 The OneVision Controller Framework.
 """
-struct OvCF{N,X,Z,U,H} <: ControllerFramework{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
+@kwdef struct OvCF{N,X,Z,U,H} <: ControllerFramework{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
     central::CentralControl
     world_model::WorldDynamics
     delay_model::DelayModel
     x_weights::Each{Vector{ℝ}}
     u_weights::Each{Vector{ℝ}}
-    save_log::FuncT{Tuple{ℕ,𝕋,X,Z},Bool}
+    "The solution accuracy of u, in max norm."
+    u_tol::ℝ = 1e-4
+    "The solution accuracy of the loss to be minimized."
+    loss_tol::ℝ = 1e-6
+    save_log::FuncT{Tuple{ℕ,𝕋,X,Z},Bool} = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
 end
 
 
@@ -72,7 +76,9 @@ function OneVision.make_controllers(
         end
         x_weights = let v = cf.x_weights[id]; SVector{length(v)}(v) end
         u_weights = let v = cf.u_weights[id]; SVector{length(v)}(v) end
-        pf_prob = PathFollowingProblem(Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing))
+        pf_prob = PathFollowingProblem(
+            Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing), cf.u_tol, cf.loss_tol
+        )
         OvController(;
             id, cf, τ=t0-1, u_history, pred_xz, self_δxz, ideal_xz, fp_prob, pf_prob,
             logs=Dict{𝕋,OvLog{X,Z,U}}(),

@@ -130,19 +130,18 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
     end
     
     H = 20
-    πc = LeaderFollowerControl(warm_up_time=delays.act)
+    central = LeaderFollowerControl(warm_up_time=delays.act)
     x_weights = fill(CarX(1.0, 1.0), N)
     u_weights = fill(CarU(1.0), N)
     result, logs = simulate(
         world_dynamics, 
         delays,
         # NaiveCF{CarX,CarZ,CarU}(N, πc, delays.com),
-        OvCF{N,CarX{ℝ},CarZ{ℝ},CarU{ℝ},H}(
-            πc, 
-            world_model, delays, x_weights, u_weights,
-            FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
-                log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
-            end
+        OvCF{N,CarX{ℝ},CarZ{ℝ},CarU{ℝ},H}(;
+            central, world_model, delay_model=delays, x_weights, u_weights,
+            # save_log = FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
+            #     log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
+            # end
         )  
         ,
         init_states,

@@ -1,13 +1,12 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue
-export integrate_Euler
-
 export @kwdef
 
 import DataStructures
 using Base: @kwdef
 using Setfield: @set
 using QuadGK: quadgk
+using Parameters: @unpack
 
 "A placeholder for unimplmeneted code."
 macro todo()

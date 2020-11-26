@@ -1,7 +1,7 @@
 module PathFollowing
 export PathFollowingProblem, follow_path_optim, follow_path_qp, x_path_from_u
 
-using OneVision: ℝ, 𝕋
+using OneVision: ℝ, 𝕋, @kwdef
 using OneVision
 using Random, LinearAlgebra
 using StaticArrays
@@ -15,12 +15,14 @@ using MathOptInterface: AbstractOptimizer
 import MutableArithmetics
 # end dependencies to be removed
 
-struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamics}
+@kwdef struct PathFollowingProblem{H,n_x,n_u,Dy <: SysDynamics}
     horizon::Val{H}
     dy::Dy
     x_weights::SVector{n_x,ℝ}
     u_weights::SVector{n_u,ℝ}
     cache::Ref{Any}
+    u_tol::ℝ = 0.0
+    loss_tol::ℝ = 0.0
 end
 
 function MutableArithmetics.undef_array(::Type{Array{T,N}}, ::StaticArrays.SOneTo{M}) where {T,N,M}
@@ -132,7 +134,13 @@ function follow_path_optim(
 
     u0::Vector{ℝ} = (use_warmstart && !ismissing(p.cache[])) ? p.cache[] : zeros(n_u_H)
     
-    res = Optim.optimize(loss, u0, Optim.LBFGS(); autodiff=:forward)
+    res = Optim.optimize(loss, u0, Optim.LBFGS(),
+        Optim.Options(
+            x_abstol = p.u_tol,
+            f_abstol = p.loss_tol,
+        ),
+        autodiff=:forward,
+    )
     @assert Optim.converged(res) "Optim not converged: $res"
 
     uvec = Optim.minimizer(res)
