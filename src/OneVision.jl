@@ -10,5 +10,5 @@ include("forward_prediction.jl")
 include("frameworks/frameworks.jl")
 include("examples/Car1DExample.jl")
 include("examples/Car2DExamples.jl")
-include("ros_integration.jl")
+# include("ros_integration.jl")
 end # OneVision

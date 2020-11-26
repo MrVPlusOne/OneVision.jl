@@ -1,10 +1,11 @@
 pkg_list = [
     :BenchmarkTools,
     :StaticArrays,
-    :JuMP,
-    :OSQP,
-    :MutableArithmetics,
+    # :JuMP,
+    # :OSQP,
+    # :MutableArithmetics,
     :Plots,
+    :PlotlyJS,
     :Measures,
     :QuadGK,
     :Unrolled,
@@ -12,4 +13,5 @@ pkg_list = [
     :Optim,
     :Traceur,
     :Makie,
+    :GLMakie,
 ]

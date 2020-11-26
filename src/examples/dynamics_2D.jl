@@ -48,37 +48,40 @@ function u_from_v_ω(v, ω, dy::CarDynamics)
     CarU(v, ψ)
 end
 
-function limit_control(dy::CarDynamics, u::CarU{R}) where R
-    u1 = CarU{R}(
-        v̂ = clamp(u.v̂, -dy.max_v, dy.max_v),
-        ψ̂ = clamp(u.ψ̂, -dy.max_ψ, dy.max_ψ),
-    )
-    u1 == u ? u : u1
+
+function limit_control(dy::CarDynamics, u::U)::U where {U}
+    v̂, ψ̂ = u
+    v̂1 = clamp(v̂, -dy.max_v, dy.max_v)
+    ψ̂1 = clamp(ψ̂, -dy.max_ψ, dy.max_ψ)
+    if v̂1 == v̂ && ψ̂1 == ψ̂
+        u
+    else
+        U(v̂, ψ̂)
+    end
 end
 
-@inline function sys_derivates(dy::CarDynamics, x::CarX{R}, u::CarU) where R
-    CarX{R}(
-        x = cos(x.θ) * x.v,
-        y = sin(x.θ) * x.v,
-        θ = ω_from_v_ψ(x.v, x.ψ, dy.l),
-        v = dy.k_v * (u.v̂ - x.v),
-        ψ = dy.k_ψ * (u.ψ̂ - x.ψ),
-    )
+
+@inline function sys_derivates(dy::CarDynamics, x::X, u)::X where X
+    x, y, θ, v, ψ = x
+    v̂, ψ̂ = u
+
+    ẋ = cos(θ) * v
+    ẏ = sin(θ) * v
+    θ̇ = ω_from_v_ψ(v, ψ, dy.l)
+    v̇ = dy.k_v * (v̂ - v)
+    ψ̇ = dy.k_ψ * (ψ̂ - ψ)
+    
+    X(ẋ,ẏ,θ̇,v̇,ψ̇)
 end
 
 struct CarObsDynamics <: ObsDynamics end
 
-function OneVision.sys_forward(
-    dy::CarDynamics, x::AbstractVector{R1}, u::AbstractVector{R2}, t::𝕋) where {R1,R2}
-    sys_forward(dy, convert(CarX{R1}, x), convert(CarU{R2}, u), t)
-end
-
-function OneVision.sys_forward(dy::CarDynamics, x::CarX, u::CarU, t::𝕋)
+function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
     u = limit_control(dy, u)
 
     N = 1
     dt = dy.delta_t / N
-    f(x) = sys_derivates(dy, x, u)
+    @inline f(x) = sys_derivates(dy, x, u)
 
     integrate_forward_invariant(f, x, dt, RK38, N)
 end

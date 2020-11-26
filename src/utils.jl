@@ -206,18 +206,18 @@ module NumericalIntegration
     end
 
 
-    function Euler(f, x::X, dt::AbstractFloat)::X where X
+    @inline function Euler(f, x::X, dt::AbstractFloat)::X where X
         f(x)::X * dt
     end
 
-    function Euler(f, x::X, dt::AbstractFloat, t)::X where X
+    @inline function Euler(f, x::X, dt::AbstractFloat, t)::X where X
         f(x, t)::X * dt
     end
 
     """
     Runge–Kutta 3/8 rule. (4th order method)
     """
-    function RK38(f, x::X, dt::AbstractFloat)::X where X
+    @inline function RK38(f, x::X, dt::AbstractFloat)::X where X
         k1 = f(x)::X
         k2 = f(x+(1/3)k1*dt)::X
         k3 = f(x+dt*((-1/3)k1+k2))::X
@@ -225,7 +225,7 @@ module NumericalIntegration
         dt * ((1/8)k1 + (3/8)k2 + (3/8)k3 + (1/8)k4)
     end
 
-    function RK38(f, x::X, dt::AbstractFloat, t)::X where X
+    @inline function RK38(f, x::X, dt::AbstractFloat, t)::X where X
         k1 = f(x, t)::X
         k2 = f(x+(1/3)k1*dt, t+(1/3)dt)::X
         k3 = f(x+dt*((-1/3)k1+k2), t+(2/3)dt)::X

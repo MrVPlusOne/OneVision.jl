@@ -8,7 +8,6 @@ else
 end
 
 using StaticArrays
-using OSQP
 using Plots
 using Test
 using Statistics: mean
@@ -36,11 +35,10 @@ let
         u_weights = @SVector [0.1]
 
         prob = PathFollowingProblem(
-            Val(H),
+            H,
             sys,
             x_weights,
             u_weights,
-            Ref{Any}(missing),
         )
         x0 = SVector(CarX(-1.0, -1.0))
 
