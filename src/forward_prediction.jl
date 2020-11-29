@@ -1,6 +1,6 @@
 using StaticArrays
 
-export ForwardPredictProblem, forward_predict, self_estimate
+export ForwardPredictProblem, forward_predict!, self_estimate
 
 struct ForwardPredictProblem{N,H,X,Z,U,Dy,Ctrl}
     world_dynamics::Dy
@@ -24,29 +24,34 @@ end
 
 """
 Forward-predict the ideal fleet trajectory.
-Returns `(ũ[t in t0: t0+H-1], x̃[t in t0+1: t0+H], z̃[t in t0+1: t0+H])`
+Returns `(ũ[t in t0: t0+H-1], x̃[t in t0+1: t0+H], z̃[t in t0+1: t0+H])`.
+Note that `init_s` will be modified from `t=t0` to `t=t0+1`. (It will then be deep copied)
 
 # Argument Details
- - `x0[t0]`: state at time t0
- - `prob.δx`: state disturbance ∈ [t0, t0+H-1]
- - `prob.δz`: observation disturbance ∈ [t0, t0+H-1]
+- `prob.δx`: state disturbance ∈ [t0, t0+H-1]
+- `prob.δz`: observation disturbance ∈ [t0, t0+H-1]
+- `init_xz`: state `x` and observation `z` at time t0
+- `init_s`: central control state at time t0, will be modified to t0+1.
 """
-function forward_predict(
+function forward_predict!(
     prob::ForwardPredictProblem{N,H,X,Z,U},
-    init_state::Each{Tuple{X,Z}},
+    init_xz::Each{Tuple{X,Z}},
+    init_s::S,
     τ0::𝕋,
-) where {X,Z,U,N,H}
+) where {X,Z,U,S,N,H}
     x_traj = MMatrix{H,N,X}(undef)
     z_traj = MMatrix{H,N,Z}(undef)
     u_traj = MMatrix{H,N,U}(undef)
 
-    xs = MVector{N,X}(first.(init_state))
-    zs = MVector{N,Z}(last.(init_state))
+    xs = MVector{N,X}(first.(init_xz))
+    zs = MVector{N,Z}(last.(init_xz))
     x_dy = prob.world_dynamics.dynamics
     z_dy = prob.world_dynamics.obs_dynamics
 
+    s_c = init_s
+
     for t in 1:H
-        us = control_all(prob.π, xs, zs, τ0 + t - 1, Base.OneTo(N))
+        us = control_all(prob.π, s_c, xs, zs, τ0 + t - 1, Base.OneTo(N))
         @inbounds for i in 1:N
             xs[i] = sys_forward(x_dy[i], xs[i], us[i], N) + prob.δx[t, i]
             zs[i] = obs_forward(z_dy[i], xs[i], zs[i], N) + prob.δz[t, i]
@@ -54,6 +59,9 @@ function forward_predict(
         x_traj[t,:] = xs
         z_traj[t,:] = zs
         u_traj[t,:] = us
+        if t == 1
+            s_c = deepcopy(s_c)
+        end
     end
     u_traj, x_traj, z_traj
 end

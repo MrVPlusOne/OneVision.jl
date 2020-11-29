@@ -2,15 +2,19 @@ if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work pr
     include("../src/OneVision.jl")
     using .OneVision
     using .OneVision.Car1DExample
+    using .OneVision.Car2DExamples
 else
     using OneVision
     using OneVision.Car1DExample
+    using OneVision.Car2DExamples
 end
 
 using StaticArrays
 using Plots
 using Test
 using Statistics: mean
+using SimpleTypePrint: config_type_display
+config_type_display()  # for simpler type error
 
 @testset "Discretize a double integrator" begin
     A, B = [0.0 1.0; 0.0 0.0], colvec([0.0; 1.0])
@@ -60,7 +64,7 @@ let
     struct NoObs <: ObsDynamics end
     OneVision.obs_forward(::NoObs, x, z, t::𝕋) = z
 
-    struct RendezvousControl <: CentralControl{CarU{ℝ}} end
+    struct RendezvousControl <: CentralControlStateless{CarU{ℝ}} end
 
     OneVision.control_one(::RendezvousControl, xs, zs, t::𝕋, id::ℕ) = begin
         target = mean(xs)
@@ -73,7 +77,7 @@ let
         s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
         s2 = (CarX(2.0, 1.0), CarZ(0.0, 0.0))
         prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; H)
-        u_traj, x_traj = forward_predict(prob, [s1,s2], 0)
+        u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0)
         y_data = hcat(x_traj[:,1]...)'
         plot(1:H, y_data; label=["x1", "v1"]) |> display
         @test true
@@ -87,3 +91,10 @@ let
         @test true
     end
 end # Double integrater let
+
+@testset "Integration tests" begin
+    Car1DExample.run_example(1:3 * 20, 20.0; noise=0.01, plot_result=true)
+    @test true
+    Car2DExamples.run_example(time_end=3, plot_result=true)
+    @test true
+end

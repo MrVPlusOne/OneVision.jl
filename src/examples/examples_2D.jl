@@ -86,7 +86,7 @@ function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         world_model = world
         x_weights = fill(X(x=1, y=1, θ=1),N)
         u_weights = fill(U(v̂=1, ψ̂=1), N)
-        OvCF{N,X,Z,U,H}(;central, world_model, delay_model,x_weights,u_weights)
+        OvCF(central, world_model, delay_model,x_weights,u_weights; X, Z, N, H)
     end
     init = let x0 = X(x = 0, y = 0, θ = pi), z0 = Z(), u0 = U()
         [(x0, z0, u0)]

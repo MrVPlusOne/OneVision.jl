@@ -165,7 +165,7 @@ function track_ref(
     u_from_v_ω(v̂, ŵ, K.dy)
 end
 
-struct RefTrackCentralControl{TC <: TrackingControl, Tr} <: CentralControl{CarU{ℝ}}
+struct RefTrackCentralControl{TC <: TrackingControl, Tr} <: CentralControlStateless{CarU{ℝ}}
     K::TC
     trajectories::FuncT{Tuple{ℕ,𝕋},CarX{ℝ},Tr}
 end

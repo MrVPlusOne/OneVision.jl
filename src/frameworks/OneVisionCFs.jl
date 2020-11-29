@@ -23,8 +23,8 @@ end
 """
 The OneVision Controller Framework.
 """
-@kwdef struct OvCF{N,X,Z,U,H} <: ControllerFramework{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
-    central::CentralControl
+@kwdef struct OvCF{N,X,Z,U,S,H} <: ControllerFramework{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
+    central::CentralControl{U,S}
     world_model::WorldDynamics
     delay_model::DelayModel
     x_weights::Each{Vector{ℝ}}
@@ -36,15 +36,27 @@ The OneVision Controller Framework.
     save_log::FuncT{Tuple{ℕ,𝕋,X,Z},Bool} = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
 end
 
+function OvCF(central::CentralControl{U,S}, 
+    world_model, delay_model, x_weights, u_weights; 
+    X, Z, N, H,
+    u_tol = 1e-4, loss_tol = 1e-6, save_log = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
+) where {U,S}
+    OvCF{N,X,Z,U,S,H}(central, world_model, delay_model, x_weights, u_weights, 
+        u_tol, loss_tol, save_log)
+end
 
-@kwdef mutable struct OvController{N,X,Z,U,H,Hf,Dy,Ctrl} <: Controller{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
+
+@kwdef mutable struct OvController{N,X,Z,U,S,H,Hf,Dy,Ctrl} <: Controller{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
     id::ℕ
-    cf::OvCF{N,X,Z,U,H}
+    cf::OvCF{N,X,Z,U,S,H}
     τ::𝕋                                # -- At the start of each controll loop --
     u_history::FixedQueue{U}            # t ∈ [τ-Tx,τ+Tu-1]
+    "predicted x and z made from last time step, used to measure disturbance."
     pred_xz::Tuple{X,Z}                 # t = τ-Tx
+    "self disturbance history"
     self_δxz::FixedQueue{Tuple{X,Z}}    # t ∈ [τ-Tx-Tc-2, τ-Tx-2]
     ideal_xz::Each{Tuple{X,Z}}          # t = τ-Tx-Tc-1
+    ideal_s::S                          # t = τ-Tx-Tc-1
     fp_prob::ForwardPredictProblem{N,Hf,X,Z,U,Dy,Ctrl}
     pf_prob::PathFollowingProblem{H}
     logs::Dict{𝕋,OvLog{X,Z,U}}
@@ -58,10 +70,10 @@ OneVision.write_logs(ctrl::OvController) = ctrl.logs
 measured at `t0-Tx`.
 """
 function OneVision.make_controllers(
-    cf::OvCF{N,X,Z,U,H},
+    cf::OvCF{N,X,Z,U,S,H},
     init_status::Each{Tuple{X,Z,U}},
     t0::𝕋,
-)::Tuple where {N,X,Z,U,H}
+)::Tuple where {N,X,Z,U,S,H}
     dm = cf.delay_model
     function mk_controller(id)
         x0, z0, u0 = init_status[id]
@@ -70,6 +82,7 @@ function OneVision.make_controllers(
         pred_xz = (x0, z0)
         self_δxz = constant_queue((zero(x0), zero(z0)), dm.com + 1)
         ideal_xz = [(x, z) for (x, z, _) in init_status]
+        ideal_s = init_state(cf.central)
 
         fp_prob = let H = H + dm.total + 1
             ForwardPredictProblem(cf.world_model, cf.central, zero(x0), zero(z0); H)
@@ -80,8 +93,8 @@ function OneVision.make_controllers(
             Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing), cf.u_tol, cf.loss_tol
         )
         OvController(;
-            id, cf, τ=t0-1, u_history, pred_xz, self_δxz, ideal_xz, fp_prob, pf_prob,
-            logs=Dict{𝕋,OvLog{X,Z,U}}(),
+            id, cf, τ=t0-1, u_history, pred_xz, self_δxz, ideal_xz, ideal_s, 
+            fp_prob, pf_prob, logs=Dict{𝕋,OvLog{X,Z,U}}(),
         )
     end
 
@@ -96,15 +109,17 @@ function OneVision.make_controllers(
 end
 
 function OneVision.control!(
-    π::OvController{N,X,Z,U,H},
+    π::OvController{N,X,Z,U,S,H},
     x::X,
     z::Z,
     msgs::Each{OvMsg{X,Z}},
-)::Tuple{U,Each{OvMsg{X,Z}}} where {N,X,Z,U,H}
+)::Tuple{U,Each{OvMsg{X,Z}}} where {N,X,Z,U,S,H}
     id = π.id
-    π.τ += 1
     world = π.cf.world_model
     dm = π.cf.delay_model
+    fp_prob = π.fp_prob
+
+    π.τ += 1
     δxz = (x, z) .- π.pred_xz  # δxz: t = τ-Tx-1
     pushpop!(π.self_δxz, δxz)  # π.self_δxz: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
     new_msg = OvMsg((x, z), δxz)
@@ -120,16 +135,16 @@ function OneVision.control!(
     for j in 1:N
         if j == id continue end
         δx, δz = msgs[j].δxz
-        π.fp_prob.δx[1, j] = δx
-        π.fp_prob.δz[1, j] = δz
+        fp_prob.δx[1, j] = δx
+        fp_prob.δz[1, j] = δz
     end
     for (t, (δx, δz)) in enumerate(π.self_δxz)
-        π.fp_prob.δx[t,id] = δx
-        π.fp_prob.δz[t,id] = δz
+        fp_prob.δx[t,id] = δx
+        fp_prob.δz[t,id] = δz
     end
 
     # x̃[t in τ-Tx-Tc: τ+Tu+H], ũ[t in τ-Tx-Tc-1: τ+Tu+H-1]
-    ũ, x̃, z̃ = forward_predict(π.fp_prob, π.ideal_xz, π.τ - dm.obs - dm.com - 1)
+    ũ, x̃, z̃ = forward_predict!(fp_prob, π.ideal_xz, π.ideal_s, π.τ - dm.obs - dm.com - 1)
     π.ideal_xz = [(x̃[1,j], z̃[1,j]) for j in 1:N]  # π.ideal_xz: t = τ-Tx-Tc
 
     # local planning using path following

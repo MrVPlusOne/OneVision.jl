@@ -1,7 +1,8 @@
 export ℝ, ℕ, 𝕋, Each
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, ObsDynamics, discretize
 export sys_forward, sys_A, sys_B, sys_w, obs_forward
-export DelayModel, WorldDynamics, CentralControl, control_one, control_all
+export DelayModel, WorldDynamics 
+export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
 
@@ -100,24 +101,46 @@ end
 # end
 
 """
-A centralized controller with actuation type `U` and no delays.
+A centralized controller with actuation type `U` and an internal state of type `S`.
+`S` could be mutable and the framework will make a deep copy of the state when needed.
 
-Should implement `control_one`.
+Should implement `control_one` and `init_state`.
 """
-abstract type CentralControl{U} end
+abstract type CentralControl{U,S} end
 
 function control_one(
-    f::CentralControl{U}, xs, zs, t::𝕋, id::ℕ
-)::U  where {U}
+    f::CentralControl{U,S}, s::S, xs, zs, t::𝕋, id::ℕ
+)::U  where {U,S}
     @require_impl
 end
 
 function control_all(
-    π::CentralControl{U}, xs,zs, t::𝕋, ids::AbstractVector{ℕ}
-)::AbstractVector{U} where {U}
-    map(i -> control_one(π, xs, zs, t, i), ids)
+    π::CentralControl{U,S}, s::S, xs,zs, t::𝕋, ids::AbstractVector{ℕ}
+)::AbstractVector{U} where {U,S}
+    map(i -> control_one(π, s, xs, zs, t, i), ids)
 end
 
+function init_state(f::CentralControl{U,S})::S where {U,S}
+    @require_impl
+end
+
+"""
+A stateless central control. Only needs to implement the following function:
+```
+    control_one(f, xs, zs, t, id)
+```
+"""
+abstract type CentralControlStateless{U} <: CentralControl{U, Nothing} end
+
+function control_one(f::CentralControlStateless, xs, zs, t::𝕋, id::ℕ) @require_impl end
+
+function control_one(
+    f::CentralControlStateless{U}, ::Nothing, xs, zs, t::𝕋, id::ℕ
+)::U  where {U}
+    control_one(f, xs, zs, t, id)
+end
+
+function init_state(::CentralControlStateless) nothing end
 
 "A distributed controller, typically generated from a controller framework.\n"
 abstract type Controller{X,Z,U,Msg,Log} end
