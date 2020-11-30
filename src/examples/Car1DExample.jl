@@ -27,7 +27,7 @@ const car_A = @SMatrix [0.0 1.0; 0.0 0.0]
 const car_B = @SMatrix [0.0; 1.0]
 
 
-function car_system(delta_t::ℝ, noise::Function=_ -> CarX(0.0, 0.0))
+function car_system(delta_t::ℝ, noise::Function = _ -> CarX(0.0, 0.0))
     A′, B′ = discretize(car_A, car_B, delta_t)
     SysDynamicsLTI(A′, B′, noise)
 end
@@ -100,7 +100,7 @@ OneVision.control_one(
     CarU(acc)
 end
 
-function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_prediction=false)
+function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_prediction = false)
     delta_t = 1 / freq
     times::Vector{𝕋} = collect(times)
     idx_to_time(xs) = (xs .- 1) .* delta_t
@@ -111,7 +111,7 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
         acc_noise = randn(rng, ℝ, 1 + t_end - t0) * noise
         sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[1 + t - t0]))
         obs_dy = 
-            if id == 1; WallObsDynamics(wall_position=30.0, detector_range=8.0)
+            if id == 1; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
             else WallObsModel() end
         
         sys_dy, obs_dy
@@ -120,7 +120,7 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
     N = 2
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
     init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
-    delays = DelayModel(obs=2, act=3, com=4)  # DelayModel(obs=1, act=2, com=5)
+    delays = DelayModel(obs = 2, act = 3, com = 4)  # DelayModel(obs=1, act=2, com=5)
     world_model = WorldDynamics(
         fill((car_system(delta_t), WallObsModel()), N))
 
@@ -130,7 +130,7 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
     end
     
     H = 20
-    central = LeaderFollowerControl(warm_up_time=delays.act)
+    central = LeaderFollowerControl(warm_up_time = delays.act)
     x_weights = fill(CarX(1.0, 1.0), N)
     u_weights = fill(CarU(1.0), N)
     result, logs = simulate(
@@ -151,21 +151,21 @@ function run_example(times, freq::ℝ; noise=0.0, plot_result=true, log_predicti
         t0, t1 = (0.0, 11.0)
         id = 1
         x_indices = [t for t in result.times if t0 ≤ (t - 1) * delta_t ≤ t1]
-        sorted_log = sort!([x for x in logs[id]], by=x -> x[1])
+        sorted_log = sort!([x for x in logs[id]], by = x -> x[1])
         δv_x = idx_to_time((x -> x[1]).(sorted_log))
         anim = @gif for (t, log) in sorted_log
             ps = []
             for (c, label) in enumerate(["δx", "δv"])
                 δv_y = [log.δxz[1][c] for (_, log) in sorted_log]
                 p = plot(idx_to_time(x_indices), 
-                        result.values[x_indices,:,c], label=["agent 1" "agent 2"])
-                plot!(p, δv_x, δv_y, label=label)
+                        result.values[x_indices,:,c], label = ["agent 1" "agent 2"])
+                plot!(p, δv_x, δv_y, label = label)
                 t -= 1
                 local ts = idx_to_time(t:t + size(log.x̃, 1) - 1)
-                plot!(p, ts, (x -> x[c]).(log.x̃); label=["central 1" "central 2"])
+                plot!(p, ts, (x -> x[c]).(log.x̃); label = ["central 1" "central 2"])
                 push!(ps, p)
             end
-            plot(ps...; layout=(2, 1))
+            plot(ps...; layout = (2, 1))
         end
         anim |> display
     end

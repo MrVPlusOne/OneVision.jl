@@ -18,7 +18,7 @@ using Unrolled
 end
 
 function Base.getindex(data::TrajectoryData, comp::String)
-    c_id = indexin([comp],data.components)[1]
+    c_id = indexin([comp], data.components)[1]
     @assert c_id !== nothing "component '$comp' not found."
     data.values[:,:,(c_id::Int)]
 end
@@ -28,7 +28,7 @@ end
 "A generic result visualization function that draws multiple line plots, 
 one for each component of the state vector.\n"
 function visualize(
-    result::TrajectoryData; delta_t=nothing
+    result::TrajectoryData; delta_t = nothing
 )::Scene
     if delta_t === nothing
         times = result.times
@@ -40,11 +40,11 @@ function visualize(
     ## currently assume all agents have the same type of states and observations
     labels = reshape(["agent $i" for i in 1:size(result.values, 2)], (1, :))
     n = length(result.components)
-    scene, layout = layoutscene(resolution=(1200, 500*n))
+    scene, layout = layoutscene(resolution = (1200, 500 * n))
     axes = map(enumerate(result.components)) do (c_id, comp)
-        ax = LAxis(scene; title=comp, xlabel)
+        ax = LAxis(scene; title = comp, xlabel)
         ys = result.values[:,:,c_id]
-        for j in 1:size(ys,2)
+        for j in 1:size(ys, 2)
             lines!(ax, times, ys[:,j])
         end
         layout[c_id,1] = ax
@@ -89,11 +89,11 @@ function simulate(
     make_agent(id::ℕ)::AgentState = begin
         (x₀, z₀, u₀) = init_status[id]
         AgentState(
-            state_queue=constant_queue(x₀, delay_model.obs),
-            obs_queue=constant_queue(z₀, delay_model.obs),
-            act_queue=constant_queue(u₀, delay_model.act),
-            msg_queue=msg_qs[id],
-            controller=controllers[id],
+            state_queue = constant_queue(x₀, delay_model.obs),
+            obs_queue = constant_queue(z₀, delay_model.obs),
+            act_queue = constant_queue(u₀, delay_model.act),
+            msg_queue = msg_qs[id],
+            controller = controllers[id],
         )
     end
     simulate_impl(

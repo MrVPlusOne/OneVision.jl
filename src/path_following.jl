@@ -46,7 +46,7 @@ function follow_path_optim(
     x_path::SMatrix{n_x,H},
     u_path::SMatrix{n_u,H},
     τ::𝕋
-)::Tuple where {n_x,n_u, H,Dy}
+)::Tuple where {n_x,n_u,H,Dy}
     n_u_H = n_u * H
 
     function loss(uvec)
@@ -75,7 +75,7 @@ function follow_path_optim(
             x_abstol = p.u_tol,
             f_abstol = p.loss_tol,
         ),
-        autodiff=:forward,
+        autodiff = :forward,
     )
     @assert Optim.converged(res) "Optim not converged: $res"
 

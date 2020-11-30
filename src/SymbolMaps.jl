@@ -18,10 +18,10 @@ end
 
 @kwdef struct SymbolMap
     base_path::Symbol = :/
-    data::Dict{Symbol, Any} = Dict{Symbol, Any}()
+    data::Dict{Symbol,Any} = Dict{Symbol,Any}()
 end
 
-Base.getindex(m::SymbolMap, path::Symbol) = m.data[m.base_path/path]
+Base.getindex(m::SymbolMap, path::Symbol) = m.data[m.base_path / path]
 Base.setindex!(m::SymbolMap, v, path::Symbol) = 
     m.data[m.base_path / path] = v
 Base.get!(m::SymbolMap, path::Symbol, default) = 

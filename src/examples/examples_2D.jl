@@ -77,21 +77,23 @@ function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end
 
     RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 1.0)
-    # RefK = TrajectoryTrackControl(;dy, k1 = 2, k2 = 1,k3 = 1)
+    # RefK = TrajectoryTrackControl(;dy, k1 = 2, k2 = 1, k3 = 1)
     central = RefTrackCentralControl(RefK, traj_f)
+
+    init = let x0 = X(x = 0, y = 0, θ = 180°), z0 = Z(), u0 = U()
+        [(x0, z0, u0)]
+    end 
 
     N = 1
     world = WorldDynamics([(dy, z_dy)])
     # framework = NaiveCF{X,Z,U}(N, central, delay_model.com)
     framework = let 
         world_model = world
-        x_weights = fill(X(x=1, y=1, θ=1),N)
-        u_weights = fill(U(v̂=1, ψ̂=1), N)
-        OvCF(central, world_model, delay_model,x_weights,u_weights; X, Z, N, H)
+        x_weights = fill(X(x = 1, y = 1, θ = 1), N)
+        u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
+        OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H)
     end
-    init = let x0 = X(x = 0, y = 0, θ = 0pi), z0 = Z(), u0 = U()
-        [(x0, z0, u0)]
-    end 
+
     comps = ["x", "y", "θ", "ψ"]
     function record_f(xs, zs, us)
         [(x -> x.x).(xs) (x -> x.y).(xs) (x -> x.θ).(xs) (x -> x.ψ).(xs)]

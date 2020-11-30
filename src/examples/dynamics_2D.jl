@@ -72,7 +72,7 @@ end
     v̇ = dy.k_v * (v̂ - v)
     ψ̇ = dy.k_ψ * (ψ̂ - ψ)
     
-    X(ẋ,ẏ,θ̇,v̇,ψ̇)
+    X(ẋ, ẏ, θ̇, v̇, ψ̇)
 end
 
 struct CarObsDynamics <: ObsDynamics end
@@ -173,7 +173,7 @@ function track_ref(
     u_from_v_ω(v̂, ŵ, K.dy)
 end
 
-struct RefTrackCentralControl{TC <: TrackingControl, Tr} <: CentralControl{CarU{ℝ}, SymbolMap}
+struct RefTrackCentralControl{TC <: TrackingControl,Tr} <: CentralControl{CarU{ℝ},SymbolMap}
     K::TC
     trajectories::FuncT{Tuple{ℕ,𝕋},CarX{ℝ},Tr}
 end
@@ -182,7 +182,7 @@ function OneVision.control_one(
     ctrl::RefTrackCentralControl, ξ::SymbolMap, xs, zs, t::𝕋, id::ℕ
 )
     x = xs[id]
-    x̂ = ctrl.trajectories((id,t))
+    x̂ = ctrl.trajectories((id, t))
     ξ = submap(ξ, Symbol(id))
     track_ref(ctrl.K, ξ, x̂, x)
 end

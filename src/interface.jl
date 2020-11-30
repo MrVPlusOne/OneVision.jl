@@ -130,7 +130,7 @@ A stateless central control. Only needs to implement the following function:
     control_one(f, xs, zs, t, id)
 ```
 """
-abstract type CentralControlStateless{U} <: CentralControl{U, Nothing} end
+abstract type CentralControlStateless{U} <: CentralControl{U,Nothing} end
 
 function control_one(f::CentralControlStateless, xs, zs, t::𝕋, id::ℕ) @require_impl end
 
@@ -142,7 +142,7 @@ end
 
 function init_state(::CentralControlStateless) nothing end
 
-function init_state(::CentralControl{U, SymbolMaps.SymbolMap}) where U
+function init_state(::CentralControl{U,SymbolMaps.SymbolMap}) where U
     SymbolMaps.SymbolMap()
 end
 

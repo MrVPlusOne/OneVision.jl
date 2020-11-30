@@ -93,8 +93,8 @@ function OneVision.make_controllers(
             Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing), cf.u_tol, cf.loss_tol
         )
         OvController(;
-            id, cf, τ=t0-1, u_history, pred_xz, self_δxz, ideal_xz, ideal_s, 
-            fp_prob, pf_prob, logs=Dict{𝕋,OvLog{X,Z,U}}(),
+            id, cf, τ = t0 - 1, u_history, pred_xz, self_δxz, ideal_xz, ideal_s, 
+            fp_prob, pf_prob, logs = Dict{𝕋,OvLog{X,Z,U}}(),
         )
     end
 

@@ -53,10 +53,10 @@ let
         x = x_path_from_u(x0, t0, u_path, prob.dy)
         times = (1:H) * dt
         plot(
-            plot(times, u'; label="u"),
-            plot(times, hcat(x', x_path'); label=["x" "v" "x*" "v*"]),
-            layout=(2, 1),
-            size=(500, 300 * 3),
+            plot(times, u'; label = "u"),
+            plot(times, hcat(x', x_path'); label = ["x" "v" "x*" "v*"]),
+            layout = (2, 1),
+            size = (500, 300 * 3),
         ) |> display
         @test true
     end
@@ -79,7 +79,7 @@ let
         prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; H)
         u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0)
         y_data = hcat(x_traj[:,1]...)'
-        plot(1:H, y_data; label=["x1", "v1"]) |> display
+        plot(1:H, y_data; label = ["x1", "v1"]) |> display
         @test true
     end
 
@@ -87,14 +87,14 @@ let
         s0 = CarX(0.0, 0.0), 0
         u_history = [CarU(0.1i) for i in 1:10]
         xs = self_estimate(sys, s0, u_history)
-        plot(1:10, hcat(xs...)'; label=["x" "v"]) |> display
+        plot(1:10, hcat(xs...)'; label = ["x" "v"]) |> display
         @test true
     end
 end # Double integrater let
 
 @testset "Integration tests" begin
-    Car1DExample.run_example(1:3 * 20, 20.0; noise=0.01, plot_result=true)
+    Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = true)
     @test true
-    Car2DExamples.run_example(time_end=3, plot_result=true)
+    Car2DExamples.run_example(time_end = 3, plot_result = true)
     @test true
 end
