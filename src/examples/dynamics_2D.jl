@@ -1,4 +1,5 @@
 using OneVision.NumericalIntegration
+using OneVision.SymbolMaps
 
 @kwdef struct CarX{R} <: FieldVector{5,R}
     "x position"
@@ -38,7 +39,7 @@ struct CarZ{R} <: FieldVector{0,R} end
     k_ψ::ℝ = 5.0
 end
 
-ψ_from_v_ω(v, ω, l) = atan(ω * l, v)
+ψ_from_v_ω(v, ω, l) = v ≈ 0 ? atan(ω * l, v) :  atan(ω * l / v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
@@ -100,8 +101,11 @@ abstract type TrackingControl end
     dy::CarDynamics
     "The distance between the reference point and rear axis, positive means forward"
     ref_pos::ℝ
-    "The propotional gain"
-    k::ℝ
+    delta_t::ℝ
+    "Propotional gain"
+    kp::ℝ
+    "Integral gain"
+    ki::ℝ
 end
 
 function ref_point(K::RefPointTrackControl, s::CarX)
@@ -121,12 +125,16 @@ function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
 end
 
 function track_ref(
-    K::RefPointTrackControl, ŝ::CarX{R}, s::CarX{R}
+    K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}
 )::CarU{R} where R
+    ξ = submap(ξ, :track_ref)
     # compute the desired ref point velocity
     p, p̂ = ref_point(K, s), ref_point(K, ŝ)
     v_p̂ = ref_point_v(K, ŝ)
-    v_p = v_p̂ + K.k * (p̂ - p)
+
+    v_p = let ∫edt = integral!(ξ, :integral, K.delta_t, p̂ - p)
+        K.kp * (p̂ - p) + K.ki * ∫edt + v_p̂ 
+    end
     # convert `v_p` back into the control `CarU`
     d = K.ref_pos
     θ = s.θ
@@ -148,7 +156,7 @@ end
 Full configuration tracking control for a 2D Car.
 """
 function track_ref(
-    K::TrajectoryTrackControl, x̂::CarX{R}, x::CarX{R}
+    K::TrajectoryTrackControl, ξ, x̂::CarX{R}, x::CarX{R}
 )::CarU{R} where R 
     θ_d, x_d, y_d, v_d = x̂.θ, x̂.x, x̂.y, x̂.v
     w_d = ω_from_v_ψ(x̂.v, x̂.ψ, K.dy.l)
@@ -165,15 +173,16 @@ function track_ref(
     u_from_v_ω(v̂, ŵ, K.dy)
 end
 
-struct RefTrackCentralControl{TC <: TrackingControl, Tr} <: CentralControlStateless{CarU{ℝ}}
+struct RefTrackCentralControl{TC <: TrackingControl, Tr} <: CentralControl{CarU{ℝ}, SymbolMap}
     K::TC
     trajectories::FuncT{Tuple{ℕ,𝕋},CarX{ℝ},Tr}
 end
 
 function OneVision.control_one(
-    ctrl::RefTrackCentralControl, xs,zs, t::𝕋, id::ℕ
+    ctrl::RefTrackCentralControl, ξ::SymbolMap, xs, zs, t::𝕋, id::ℕ
 )
     x = xs[id]
     x̂ = ctrl.trajectories((id,t))
-    track_ref(ctrl.K, x̂, x)
+    ξ = submap(ξ, Symbol(id))
+    track_ref(ctrl.K, ξ, x̂, x)
 end

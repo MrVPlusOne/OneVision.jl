@@ -3,6 +3,7 @@ module OneVision
 using Reexport
 
 include("utils.jl")
+include("SymbolMaps.jl")
 include("interface.jl")
 include("simulation.jl")
 include("path_following.jl")

@@ -58,9 +58,10 @@ end
 function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     X, Z, U = CarX{ℝ}, CarZ{ℝ}, CarU{ℝ}
     t_end = 𝕋(ceil(time_end * freq))
+    delta_t = 1 / freq
 
     # Car dynamics parameters
-    dy = CarDynamics(delta_t = 1 / freq, max_ψ = 60°)
+    dy = CarDynamics(;delta_t, max_ψ = 60°)
     z_dy = CarObsDynamics()
 
     delay_model = DelayModel(obs = 3, act = 3, com = 1)
@@ -75,8 +76,8 @@ function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         circ_traj[t]
     end
 
-    # RefK = RefPointTrackControl(;dy, ref_pos = dy.l, k = 1.0)
-    RefK = TrajectoryTrackControl(;dy, k1 = 2, k2 = 1,k3 = 1)
+    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 1.0)
+    # RefK = TrajectoryTrackControl(;dy, k1 = 2, k2 = 1,k3 = 1)
     central = RefTrackCentralControl(RefK, traj_f)
 
     N = 1
@@ -88,7 +89,7 @@ function run_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         u_weights = fill(U(v̂=1, ψ̂=1), N)
         OvCF(central, world_model, delay_model,x_weights,u_weights; X, Z, N, H)
     end
-    init = let x0 = X(x = 0, y = 0, θ = pi), z0 = Z(), u0 = U()
+    init = let x0 = X(x = 0, y = 0, θ = 0pi), z0 = Z(), u0 = U()
         [(x0, z0, u0)]
     end 
     comps = ["x", "y", "θ", "ψ"]

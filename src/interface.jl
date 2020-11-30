@@ -142,6 +142,10 @@ end
 
 function init_state(::CentralControlStateless) nothing end
 
+function init_state(::CentralControl{U, SymbolMaps.SymbolMap}) where U
+    SymbolMaps.SymbolMap()
+end
+
 "A distributed controller, typically generated from a controller framework.\n"
 abstract type Controller{X,Z,U,Msg,Log} end
 
