@@ -16,11 +16,13 @@ import Optim
     cache::Ref{Any}
     u_tol::ℝ = 0.0
     loss_tol::ℝ = 0.0
+    loss_rel_tol::ℝ = 0.0
 end
 
-PathFollowingProblem(H::𝕋, dy, x_weights, u_weights; u_tol = 0.0, loss_tol = 0.0) =
+PathFollowingProblem(H::𝕋, dy, x_weights, u_weights; 
+    u_tol = 0.0, loss_tol = 0.0, loss_rel_tol = 0.0) =
     PathFollowingProblem(
-        Val(H), dy, x_weights, u_weights, Ref{Any}(missing), u_tol, loss_tol)
+        Val(H), dy, x_weights, u_weights, Ref{Any}(missing), u_tol, loss_tol, loss_rel_tol)
 
 function x_path_from_u(x0::SVector{n_x,ℝ}, t0::𝕋, û::SMatrix{n_u,H,ℝ}, dy) where {n_x,n_u,H}
     x̂ = MMatrix{n_x,H,ℝ}(undef)
@@ -74,6 +76,8 @@ function follow_path_optim(
         Optim.Options(
             x_abstol = p.u_tol,
             f_abstol = p.loss_tol,
+            f_reltol = p.loss_rel_tol,
+            iterations = 100,
         ),
         autodiff = :forward,
     )

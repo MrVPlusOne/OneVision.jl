@@ -171,7 +171,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     delta_t = 1 / freq
 
     # Car dynamics parameters
-    dy = CarDynamics(;delta_t, max_ψ = 60°)
+    dy = CarDynamics(;delta_t, max_ψ = 45°)
     external_control(t) = begin
         if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
@@ -188,8 +188,8 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
 
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
-    real_delay_model = DelayModel(obs = 5, act = 3, com = 4)
-    delay_model = DelayModel(obs = 1, act = 3, com = 8)
+    real_delay_model = DelayModel(obs = 1, act = 3, com = 4)
+    delay_model = DelayModel(obs = 1, act = 3, com = 4)
     H = 20
 
     N = 4
@@ -214,8 +214,8 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     framework = let 
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H,
-            u_tol=1e-4, loss_tol=1e-4)
+        OvCF(central, world_model, delay_model, x_weights, u_weights; 
+            X, Z, N, H, loss_tol = 1e-4)
     end
 
     comps = ["x", "y", "θ", "ψ", "v"]

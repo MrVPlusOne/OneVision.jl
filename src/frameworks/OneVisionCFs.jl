@@ -30,19 +30,21 @@ The OneVision Controller Framework.
     x_weights::Each{Vector{ℝ}}
     u_weights::Each{Vector{ℝ}}
     "The solution accuracy of u, in max norm."
-    u_tol::ℝ = 1e-4
+    u_tol::ℝ
     "The solution accuracy of the loss to be minimized."
-    loss_tol::ℝ = 1e-6
+    loss_tol::ℝ
+    loss_rel_tol::ℝ
     save_log::FuncT{Tuple{ℕ,𝕋,X,Z},Bool} = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
 end
 
 function OvCF(central::CentralControl{U,S}, 
     world_model, delay_model, x_weights, u_weights; 
     X, Z, N, H,
-    u_tol = 1e-4, loss_tol = 1e-6, save_log = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
+    u_tol = 1e-4, loss_tol = 1e-6, loss_rel_tol = 1e-6,
+    save_log = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
 ) where {U,S}
-    OvCF{N,X,Z,U,S,H}(central, world_model, delay_model, x_weights, u_weights, 
-        u_tol, loss_tol, save_log)
+    OvCF{N,X,Z,U,S,H}(;central, world_model, delay_model, x_weights, u_weights, 
+        u_tol, loss_tol, loss_rel_tol, save_log)
 end
 
 
@@ -90,7 +92,8 @@ function OneVision.make_controllers(
         x_weights = let v = cf.x_weights[id]; SVector{length(v)}(v) end
         u_weights = let v = cf.u_weights[id]; SVector{length(v)}(v) end
         pf_prob = PathFollowingProblem(
-            Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing), cf.u_tol, cf.loss_tol
+            Val(H), x_dy, x_weights, u_weights, Ref{Any}(missing), 
+            cf.u_tol, cf.loss_tol, cf.loss_rel_tol,
         )
         OvController(;
             id, cf, τ = t0 - 1, u_history, pred_xz, self_δxz, ideal_xz, ideal_s, 

@@ -37,7 +37,7 @@ end
     k_ψ::ℝ = 5.0
 end
 
-ψ_from_v_ω(v, ω, l) = v ≈ 0 ? atan(ω * l, v) :  atan(ω * l / v)
+ψ_from_v_ω(v, ω, l) = abs(v) < 0.1 ? atan(ω * l, v) :  atan(ω * l / v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
