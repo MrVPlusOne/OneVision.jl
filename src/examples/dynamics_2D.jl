@@ -214,9 +214,8 @@ struct FormationControl <: CentralControl{CarU{ℝ}, SymbolMap}
     dy::CarDynamics
 end
 
-function formation_controller(ctrl, ξ, xs, zs, t)
+function to_formation_frame(ctrl::FormationControl, s_leader)
     K = ctrl.K
-    s_leader = xs[1]
     rot = rotation2D(s_leader.θ)
     pos_offset = ref_point(K, s_leader)
     v_offset = ref_point_v(K, s_leader)
@@ -225,9 +224,15 @@ function formation_controller(ctrl, ξ, xs, zs, t)
     function formpoint_to_refpoint(fp)
         pos = rot * fp + pos_offset
         x, y = fp
-        v = @SVector[-ω*y, ω*x] + v_offset
+        v = rot * @SVector[-ω*y, ω*x] + v_offset
         pos, v
     end
+
+    formpoint_to_refpoint
+end
+
+function formation_controller(ctrl, ξ, xs, zs, t)
+    formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
 
     function action(id)
         (id == 1) && return zs[1]
@@ -235,7 +240,7 @@ function formation_controller(ctrl, ξ, xs, zs, t)
         s = ctrl.formation[id]
         p_ref = formpoint_to_refpoint(@SVector[s.x, s.y])
         ξi = submap(ξ, Symbol(id))
-        track_refpoint(K, ξi, p_ref, xs[id], t)
+        track_refpoint(ctrl.K, ξi, p_ref, xs[id], t)
     end
 
     action

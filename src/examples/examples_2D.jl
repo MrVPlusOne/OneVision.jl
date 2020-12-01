@@ -56,7 +56,7 @@ function plot_tracking(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{�
     scene
 end
 
-function plot_formation(data::TrajectoryData, freq::ℝ)
+function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
     scene, layout = layoutscene(resolution = (1600, 1600))
 
     ax_traj = layout[1,1] = LAxis(
@@ -85,6 +85,19 @@ function plot_formation(data::TrajectoryData, freq::ℝ)
         end
         poly!(ax_traj, car; color = colors[id], strokecolor=:black, strokewidth=2)
     end
+    # draw ref points
+    refpoints = @lift let
+        x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
+        leader = CarX(;x, y, θ, ψ, v)
+        @_ (ctrl.formation 
+            |> map(ref_point(ctrl.K, _),__) 
+            |> map(to_formation_frame(ctrl, leader), __))
+    end
+    points = @lift (x -> Point2f0(x[1])).($refpoints)
+    directions = @lift (x -> Point2f0(x[2])).($refpoints)
+    arrows!(ax_traj, points, directions; 
+        linecolor=:red, arrowcolor=:red, lengthscale=0.2, arrowsize=0.1)
+    scatter!(ax_traj, points; color=:red)
 
     scene
 end
@@ -202,9 +215,10 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H)
     end
 
-    comps = ["x", "y", "θ", "ψ"]
+    comps = ["x", "y", "θ", "ψ", "v"]
     function record_f(xs, zs, us)
-        [(x -> x.x).(xs) (x -> x.y).(xs) (x -> x.θ).(xs) (x -> x.ψ).(xs)]
+        comps = [:x, :y, :θ, :ψ, :v]
+        hcat(((p -> getfield(p,c)).(xs) for c in comps)...)
     end
 
     world = [(dy, leader_z_dy); fill((dy, StaticObsDynamics()), N-1)] |> WorldDynamics
@@ -212,7 +226,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         world, delay_model, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
-        plot_formation(result, freq) |> display
+        plot_formation(result, freq, central) |> display
     end
     result, logs
 end
