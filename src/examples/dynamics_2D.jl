@@ -21,8 +21,6 @@ end
     ψ̂::R = 0.0
 end
 
-struct CarZ{R} <: FieldVector{0,R} end
-
 # TODO: fine-tune these parameters
 @kwdef struct CarDynamics <: SysDynamics
     "control time interval in seconds"
@@ -75,8 +73,6 @@ end
     X(ẋ, ẏ, θ̇, v̇, ψ̇)
 end
 
-struct CarObsDynamics <: ObsDynamics end
-
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
     u = limit_control(dy, u)
 
@@ -86,10 +82,6 @@ function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
 
     integrate_forward_invariant(f, x, dt, RK38, N)
 end
-
-function OneVision.obs_forward(
-    dy::CarObsDynamics, x::CarX, z::CarZ, t::𝕋
-) z end
 
 """
 Should implement `track_ref`.
@@ -127,11 +119,17 @@ end
 function track_ref(
     K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}
 )::CarU{R} where R
-    ξ = submap(ξ, :track_ref)
     # compute the desired ref point velocity
-    p, p̂ = ref_point(K, s), ref_point(K, ŝ)
+    p̂ = ref_point(K, ŝ)
     v_p̂ = ref_point_v(K, ŝ)
 
+    track_refpoint(K, ξ, p̂, v_p̂, s)
+end
+
+function track_refpoint(
+    K::RefPointTrackControl, ξ::SymbolMap, p̂, v_p̂, s::CarX{R}
+)::CarU{R} where R
+    p = ref_point(K, s)
     v_p = let ∫edt = integral!(ξ, :integral, K.delta_t, p̂ - p)
         K.kp * (p̂ - p) + K.ki * ∫edt + v_p̂ 
     end
@@ -144,7 +142,7 @@ function track_ref(
 end
 
 
-@kwdef struct TrajectoryTrackControl <: TrackingControl
+@kwdef struct ConfigTrackControl <: TrackingControl
     dy::CarDynamics
     k1::ℝ
     k2::ℝ
@@ -156,7 +154,7 @@ end
 Full configuration tracking control for a 2D Car.
 """
 function track_ref(
-    K::TrajectoryTrackControl, ξ, x̂::CarX{R}, x::CarX{R}
+    K::ConfigTrackControl, ξ, x̂::CarX{R}, x::CarX{R}
 )::CarU{R} where R 
     θ_d, x_d, y_d, v_d = x̂.θ, x̂.x, x̂.y, x̂.v
     w_d = ω_from_v_ψ(x̂.v, x̂.ψ, K.dy.l)
@@ -185,4 +183,56 @@ function OneVision.control_one(
     x̂ = ctrl.trajectories((id, t))
     ξ = submap(ξ, Symbol(id))
     track_ref(ctrl.K, ξ, x̂, x)
+end
+
+# === formation driving example ====
+const Formation{R} = Vector{CarX{R}}
+
+function rotate_formation(form::Formation{R}, α)::Formation{R} where R
+    mat = rotation2D(α)
+    function f(s::CarX{R})
+        @unpack x, y, θ, v, ψ = s
+        x, y = mat * @SVector([x, y])
+        θ += α
+        CarX(; x, y, θ, v, ψ)
+    end
+    f.(form)
+end
+
+"""
+Leader-follower formation control
+"""
+struct FormationControl <: CentralControl{CarU{ℝ}, SymbolMap}
+    formation::Formation{ℝ}
+    K::RefPointTrackControl
+    dy::CarDynamics
+end
+
+function OneVision.control_all(
+    ctrl::FormationControl, ξ::SymbolMap, xs, zs, t::𝕋, ids:: AbstractVector{ℕ}
+)
+    K = ctrl.K
+    s_leader = xs[1]
+    rot = rotation2D(s_leader.θ)
+    pos_offset = ref_point(K, s_leader)
+    v_offset = ref_point_v(K, s_leader)
+    ω = ω_from_v_ψ(s_leader.v, s_leader.ψ, ctrl.dy.l)
+
+    function formpoint_to_refpoint(fp)
+        pos = rot * fp + pos_offset
+        x, y = fp
+        v = @SVector[-ω*y, ω*x] + v_offset
+        pos, v
+    end
+
+    action(id) = begin
+        (id == 1) && return zs[1]
+        
+        s = ctrl.formation[id]
+        p, v_p = formpoint_to_refpoint(@SVector[s.x, s.y])
+        ξi = submap(ξ, Symbol(id))
+        track_refpoint(K, ξi, p, v_p, xs[id])
+    end
+
+    action.(ids)
 end

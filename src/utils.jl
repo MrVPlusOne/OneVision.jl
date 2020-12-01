@@ -1,12 +1,15 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue
-export @kwdef
+export °, rotation2D
+export @kwdef, @_
 
 import DataStructures
 using Base: @kwdef
+using Underscores: @_
 using Setfield: @set
 using QuadGK: quadgk
 using Parameters: @unpack
+using StaticArrays
 
 "A placeholder for unimplmeneted code."
 macro todo()
@@ -241,3 +244,7 @@ end
 <|(f, x) = f(x)
 
 const ° = pi/180
+
+rotation2D(α) = 
+    @SMatrix [ cos(α) sin(α)
+              -sin(α) cos(α)]

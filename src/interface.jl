@@ -1,5 +1,6 @@
 export ℝ, ℕ, 𝕋, Each
-export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, ObsDynamics, discretize
+export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
+export ObsDynamics, StaticObsDynamics
 export sys_forward, sys_A, sys_B, sys_w, obs_forward
 export DelayModel, WorldDynamics 
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
@@ -17,7 +18,8 @@ one for each agent in the fleet.
 """
 Each{T} = Vector{T}
 
-""" A system dynamics with the state type `X` and action type `U`.
+"""
+A state dynamics model.
 """
 abstract type SysDynamics end
 
@@ -74,6 +76,10 @@ end
 
 abstract type ObsDynamics end
 
+"""
+Assume the observation remains the same.
+"""
+struct StaticObsDynamics <: ObsDynamics end
 
 """
     obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where Z
@@ -83,6 +89,9 @@ the OneVision will only work well if `z` does not (or weakly) depend on `x`.
 """
 function obs_forward(dy::ObsDynamics, x, z::Z, t::𝕋)::Z where {Z} @require_impl end
 
+function obs_forward(
+    dy::StaticObsDynamics, x, z, t::𝕋
+) z end
 
 struct DelayModel
     obs::ℕ  # observation delay: Tx

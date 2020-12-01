@@ -4,10 +4,10 @@ using DrWatson
 if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
     include("../src/OneVision.jl")
     # using .OneVision
-    using .OneVision.Car2DExamples: run_example, plot_cars
+    using .OneVision.Car2DExamples: run_example
 else
     # using OneVision
-    using OneVision.Car2DExamples: run_example, plot_cars
+    using OneVision.Car2DExamples: run_example
 end
 
 using BenchmarkTools: @benchmark
