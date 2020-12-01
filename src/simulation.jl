@@ -5,6 +5,7 @@ using Makie
 using AbstractPlotting.MakieLayout
 using StaticArrays
 using Unrolled
+using Base.Iterators: drop
 
 @kwdef struct TrajectoryData
     times::Vector{𝕋}
@@ -85,6 +86,12 @@ function simulate(
     times::AbstractVector{𝕋},
 )::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
     (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
+
+    function shorten_queue(q, len)
+        @assert len ≤ length(q) "Actual communication delay should ≤ the modeled delay."
+        to_drop = length(q) - len
+        FixedQueue(collect(drop(collect(q), to_drop)))
+    end
     
     make_agent(id::ℕ)::AgentState = begin
         (x₀, z₀, u₀) = init_status[id]
@@ -92,7 +99,7 @@ function simulate(
             state_queue = constant_queue(x₀, delay_model.obs),
             obs_queue = constant_queue(z₀, delay_model.obs),
             act_queue = constant_queue(u₀, delay_model.act),
-            msg_queue = msg_qs[id],
+            msg_queue = shorten_queue(msg_qs[id], delay_model.com),
             controller = controllers[id],
         )
     end

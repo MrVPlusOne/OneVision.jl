@@ -105,9 +105,6 @@ struct DelayModel
     end
 end
 
-# function Base.getproperty(dm::DelayModel, s::Symbol)
-#     if 
-# end
 
 """
 A centralized controller with actuation type `U` and an internal state of type `S`.

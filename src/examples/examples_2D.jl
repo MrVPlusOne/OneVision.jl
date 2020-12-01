@@ -179,14 +179,17 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
             U(v̂ = 1.0, ψ̂ = 10°)
         elseif t ≤ 8 * freq
             U(v̂ = 1.0, ψ̂ = 0°)
-        else
+        elseif t ≤ 15 * freq
             U(v̂ = 2.0, ψ̂ = 2°)
+        else
+            U(v̂ = 2(1 - (t/freq-15)/5), ψ̂ = 2°)
         end
     end
 
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
-    delay_model = DelayModel(obs = 1, act = 3, com = 3)
+    real_delay_model = DelayModel(obs = 5, act = 3, com = 4)
+    delay_model = DelayModel(obs = 1, act = 3, com = 8)
     H = 20
 
     N = 4
@@ -197,8 +200,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         [[zero(X)]; circle]
     end
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 2.0, ki = 1.0, kd = 2.0)
-    # RefK = ConfigTrackControl(;dy, k1 = 2, k2 = 1, k3 = 1)
+    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 0.0, kd = 0.5)
     central = FormationControl(formation, RefK, dy)
 
     formation = rotate_formation(formation, 0°)
@@ -212,7 +214,8 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     framework = let 
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H)
+        OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H,
+            u_tol=1e-4, loss_tol=1e-4)
     end
 
     comps = ["x", "y", "θ", "ψ", "v"]
@@ -223,7 +226,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
 
     world = [(dy, leader_z_dy); fill((dy, StaticObsDynamics()), N-1)] |> WorldDynamics
     result, logs = simulate(
-        world, delay_model, framework, init, (comps, record_f), 1:t_end)
+        world, real_delay_model, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_formation(result, freq, central) |> display
