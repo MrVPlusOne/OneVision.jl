@@ -3,10 +3,11 @@ export SymbolMap, submap
 export integral!, derivative!
 
 import Base./
-using Base: @kwdef
+using OneVision
 
-function symbol_path(s1::Symbol, s2::Symbol)
-    Symbol(string(s1, "/", s2))
+const symbol_path_cache = Dict{Tuple{Symbol, Symbol}, Symbol}()
+function symbol_path(s1::Symbol, s2::Symbol)::Symbol
+    @get!(symbol_path_cache, (s1,s2), Symbol(string(s1, "/", s2)))
 end
 
 """

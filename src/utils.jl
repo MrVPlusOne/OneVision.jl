@@ -1,5 +1,5 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
-export FixedQueue, pushpop!, constant_queue
+export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D
 export @kwdef, @_
 
@@ -90,6 +90,19 @@ macro unzip(xs, xs_type::Expr)
     result_t = type_transpose(xs_type)
     :(unzip_impl($(esc(xs))::$(esc(xs_type)))::$(esc(result_t)))
     # :(unzip_impl($xs::$xs_type)::$result_t) |> esc
+end
+
+macro get!(collection, key, default)
+    quote
+        col = $(esc(collection))
+        k = $(esc(key))
+        r = get(col, k, nothing)
+        if r === nothing
+            col[k] = $(esc(default))
+        else
+            r
+        end
+    end
 end
 
 """
