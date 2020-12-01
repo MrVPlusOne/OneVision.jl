@@ -26,6 +26,8 @@ Base.setindex!(m::SymbolMap, v, path::Symbol) =
     m.data[m.base_path / path] = v
 Base.get!(m::SymbolMap, path::Symbol, default) = 
     get!(m.data, m.base_path / path, default)
+Base.get(m::SymbolMap, path::Symbol, default) = 
+    get(m.data, m.base_path / path, default)
 
 """
 Creat a restricted view of the orginal SymbolMap. 
@@ -34,12 +36,30 @@ function submap(m::SymbolMap, path::Symbol)::SymbolMap
     SymbolMap(m.base_path / path, m.data)
 end
 
-function integral!(m::SymbolMap, path::Symbol, delta_t, e::E)::E where E
-    m[path] = get!(m, path, zero(E))::E + delta_t * e
+function integral!(m::SymbolMap, path::Symbol, t::T, e::E)::E where {T,E}
+    r = get(m, path, nothing)
+    if r === nothing
+        (m[path] = (t, zero(E)))[2]
+    else
+        (t0, v0) = r::Tuple{T,E}
+        @assert(t > t0, "`integral!` with the path `$path` shouldn't be called multiple 
+                times in a single time step. (t = $t)")
+        Δt = t - t0
+        (m[path] = (t, v0 + e * Δt))[2]
+    end 
 end
 
-function derivative!(m::SymbolMap, path::SymbolMap, delta_t, e::E)::E where E
-    m[path] = (e - get!(m, path, e)::E) / delta_t
+function derivative!(m::SymbolMap, path::Symbol, t::T, e::E)::E where {T,E}
+    r = get(m, path, nothing)
+    if r === nothing
+        (m[path] = (t, zero(E)))[2]
+    else
+        (t0, v0) = r::Tuple{T,E}
+        @assert(t > t0, "`derivative!` with the path `$path` shouldn't be called multiple 
+                times in a single time step. (t = $t)")
+        Δt = t - t0
+        (m[path] = (t, v0 + e / Δt))[2]
+    end 
 end
 
 end # module SymbolMaps

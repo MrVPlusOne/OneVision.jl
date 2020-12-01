@@ -74,13 +74,13 @@ function plot_formation(data::TrajectoryData, freq::ℝ)
     colors = [get(ColorSchemes.Spectral_10, i/N) for i in 1:N]
     # draw trajectories
     for id in 1:N
-        xs, ys = data["x"][:,id], data["y"][:,id]
-        θs = data["θ"][:,id]
+        xs, ys, θs = map(l -> data[l][:,id], ("x", "y", "θ"))
         lines!(ax_traj, xs, ys; color=colors[id], linewidth=3)
     end
     # draw cars
     for id in 1:N
-        car = @lift let x = data["x"][$t, id], y = data["y"][$t, id], θ = data["θ"][$t, id]
+        car = @lift let 
+            x, y, θ = map(l -> data[l][$t,id], ("x", "y", "θ"))
             car_triangle(x, y, θ)
         end
         poly!(ax_traj, car; color = colors[id], strokecolor=:black, strokewidth=2)
@@ -164,20 +164,16 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
             U(v̂ = 1.0, ψ̂ = 0.0)
         elseif t ≤ 5 * freq
             U(v̂ = 1.0, ψ̂ = 10°)
-        elseif t ≤ 6 * freq
-            U(v̂ = 1.0, ψ̂ = 0°)
         elseif t ≤ 8 * freq
-            τ = t/freq - 4
-            a = 0.5
-            U(v̂ = 1.0 + a * τ, ψ̂ = 0.0)
+            U(v̂ = 1.0, ψ̂ = 0°)
         else
-            U(v̂ = 2.0, ψ̂ = 5°)
+            U(v̂ = 2.0, ψ̂ = 2°)
         end
     end
 
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
-    delay_model = DelayModel(obs = 0, act = 0, com = 1)
+    delay_model = DelayModel(obs = 1, act = 3, com = 3)
     H = 20
 
     N = 4
@@ -188,17 +184,18 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         [[zero(X)]; circle]
     end
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 0.5)
+    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 2.0, ki = 1.0, kd = 2.0)
     # RefK = ConfigTrackControl(;dy, k1 = 2, k2 = 1, k3 = 1)
     central = FormationControl(formation, RefK, dy)
 
+    formation = rotate_formation(formation, 0°)
     init = map(1:N) do i 
         x = formation[i]
         x, zero(Z), zero(U)
     end
 
     world_model = WorldDynamics(fill((dy, StaticObsDynamics()), N))
-    # framework = NaiveCF{X,Z,U}(N, central, delay_model.com)
+    # framework = NaiveCF(X, Z, N, central, delay_model.com)
     framework = let 
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)

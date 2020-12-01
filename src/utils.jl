@@ -246,5 +246,5 @@ end
 const ° = pi/180
 
 rotation2D(α) = 
-    @SMatrix [ cos(α) sin(α)
-              -sin(α) cos(α)]
+    @SMatrix [cos(α) -sin(α)
+              sin(α)  cos(α)]

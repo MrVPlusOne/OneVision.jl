@@ -96,15 +96,17 @@ abstract type TrackingControl end
     delta_t::ℝ
     "Propotional gain"
     kp::ℝ
-    "Integral gain"
-    ki::ℝ
+    "(Discrete) Integral gain"
+    ki::ℝ = 0.0
+    "(Discrete) Derivative gain"
+    kd::ℝ = 0.0
 end
 
 function ref_point(K::RefPointTrackControl, s::CarX)
     d = K.ref_pos
     x = s.x + d * cos(s.θ)
     y = s.y + d * sin(s.θ)
-    SVector(x, y)
+    @SVector[x, y]
 end
 
 function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
@@ -113,31 +115,35 @@ function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
     ω = ω_from_v_ψ(v, ψ, K.dy.l)
     v̂_x = v * cos(θ) - sin(θ) * ω * d
     v̂_y = v * sin(θ) + cos(θ) * ω * d
-    SVector(v̂_x, v̂_y)
+    @SVector[v̂_x, v̂_y]
 end
 
 function track_ref(
-    K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}
+    K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}, t
 )::CarU{R} where R
     # compute the desired ref point velocity
     p̂ = ref_point(K, ŝ)
     v_p̂ = ref_point_v(K, ŝ)
 
-    track_refpoint(K, ξ, p̂, v_p̂, s)
+    track_refpoint(K, ξ, (p̂, v_p̂), s, t)
 end
 
 function track_refpoint(
-    K::RefPointTrackControl, ξ::SymbolMap, p̂, v_p̂, s::CarX{R}
+    K::RefPointTrackControl, ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
 )::CarU{R} where R
+    ξ = submap(ξ, :track_refpoint)
     p = ref_point(K, s)
-    v_p = let ∫edt = integral!(ξ, :integral, K.delta_t, p̂ - p)
-        K.kp * (p̂ - p) + K.ki * ∫edt + v_p̂ 
+    v_p = let
+        Δt = K.delta_t
+        ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
+        dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
+        K.kp * (p̂ - p) + ∫edt + v_p̂ 
     end
     # convert `v_p` back into the control `CarU`
     d = K.ref_pos
     θ = s.θ
-    v = cos(θ) * v_p[1] + sin(θ) * v_p[2]
-    ω = -sin(θ) / d * v_p[1] + cos(θ) / d * v_p[2]
+    v, v_y = rotation2D(-θ) * v_p
+    ω = v_y / d
     u_from_v_ω(v, ω, K.dy)
 end
 
@@ -154,7 +160,7 @@ end
 Full configuration tracking control for a 2D Car.
 """
 function track_ref(
-    K::ConfigTrackControl, ξ, x̂::CarX{R}, x::CarX{R}
+    K::ConfigTrackControl, ξ, x̂::CarX{R}, x::CarX{R}, t
 )::CarU{R} where R 
     θ_d, x_d, y_d, v_d = x̂.θ, x̂.x, x̂.y, x̂.v
     w_d = ω_from_v_ψ(x̂.v, x̂.ψ, K.dy.l)
@@ -182,7 +188,7 @@ function OneVision.control_one(
     x = xs[id]
     x̂ = ctrl.trajectories((id, t))
     ξ = submap(ξ, Symbol(id))
-    track_ref(ctrl.K, ξ, x̂, x)
+    track_ref(ctrl.K, ξ, x̂, x, t)
 end
 
 # === formation driving example ====
@@ -208,9 +214,7 @@ struct FormationControl <: CentralControl{CarU{ℝ}, SymbolMap}
     dy::CarDynamics
 end
 
-function OneVision.control_all(
-    ctrl::FormationControl, ξ::SymbolMap, xs, zs, t::𝕋, ids:: AbstractVector{ℕ}
-)
+function formation_controller(ctrl, ξ, xs, zs, t)
     K = ctrl.K
     s_leader = xs[1]
     rot = rotation2D(s_leader.θ)
@@ -225,14 +229,25 @@ function OneVision.control_all(
         pos, v
     end
 
-    action(id) = begin
+    function action(id)
         (id == 1) && return zs[1]
-        
+
         s = ctrl.formation[id]
-        p, v_p = formpoint_to_refpoint(@SVector[s.x, s.y])
+        p_ref = formpoint_to_refpoint(@SVector[s.x, s.y])
         ξi = submap(ξ, Symbol(id))
-        track_refpoint(K, ξi, p, v_p, xs[id])
+        track_refpoint(K, ξi, p_ref, xs[id], t)
     end
 
-    action.(ids)
+    action
+end
+
+function OneVision.control_one(ctrl::FormationControl, ξ::SymbolMap, xs, zs, t::𝕋, id::ℕ)
+    formation_controller(ctrl, ξ, xs, zs, t)(id)
+end
+
+function OneVision.control_all(
+    ctrl::FormationControl, ξ::SymbolMap, xs, zs, t::𝕋, ids:: AbstractVector{ℕ}
+)
+    f = formation_controller(ctrl, ξ, xs, zs, t)
+    f.(ids)
 end

@@ -11,6 +11,9 @@ struct NaiveCF{X,Z,U,S} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z},Nothing}
     msg_delay::ℕ
 end
 
+NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_delay) where {U,S} = 
+    NaiveCF{X,Z,U,S}(N, central, msg_delay)
+
 mutable struct NaiveController{X,Z,U,S} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
     self::ℕ
     central::CentralControl{U,S}
