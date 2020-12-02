@@ -1,7 +1,7 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D
-export @kwdef, @_
+export @kwdef, @_, @set
 
 import DataStructures
 using Base: @kwdef

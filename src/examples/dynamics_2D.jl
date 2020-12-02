@@ -22,7 +22,7 @@ end
 end
 
 # TODO: fine-tune these parameters
-@kwdef struct CarDynamics <: SysDynamics
+@kwdef struct CarDynamics{NF} <: SysDynamics
     "control time interval in seconds"
     delta_t::ℝ
     "maximal linear speed"
@@ -35,6 +35,8 @@ end
     k_v::ℝ = 5.0
     "rate of convergence for ψ to converge to ψ̂"
     k_ψ::ℝ = 5.0
+    "add_noise(x, t) -> x′"
+    add_noise::NF = (x, t) -> x
 end
 
 ψ_from_v_ω(v, ω, l) = abs(v) < 0.1 ? atan(ω * l, v) :  atan(ω * l / v)
@@ -80,7 +82,8 @@ function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
     dt = dy.delta_t / N
     @inline f(x) = sys_derivates(dy, x, u)
 
-    integrate_forward_invariant(f, x, dt, RK38, N)
+    x′ = integrate_forward_invariant(f, x, dt, RK38, N)
+    dy.add_noise(x′,t)
 end
 
 """

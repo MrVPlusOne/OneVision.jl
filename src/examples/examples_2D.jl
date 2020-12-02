@@ -171,7 +171,13 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     delta_t = 1 / freq
 
     # Car dynamics parameters
-    dy = CarDynamics(;delta_t, max_ψ = 45°)
+    dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
+    rng = MersenneTwister(1234)
+    function add_noise(x::X, t)::X where X
+        x + randn(rng, X) * 0.005
+    end
+    dy_actual = @set dy_model.add_noise = add_noise
+
     external_control(t) = begin
         if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
@@ -185,11 +191,10 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
             U(v̂ = 2(1 - (t/freq-15)/5), ψ̂ = 2°)
         end
     end
-
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
-    real_delay_model = DelayModel(obs = 1, act = 3, com = 4)
-    delay_model = DelayModel(obs = 1, act = 3, com = 4)
+    delays_model  = DelayModel(obs = 0, act = 0, com = 1)
+    delays_actual = DelayModel(obs = 0, act = 0, com = 1)
     H = 20
 
     N = 4
@@ -200,8 +205,9 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         [[zero(X)]; circle]
     end
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 0.0, kd = 0.5)
-    central = FormationControl(formation, RefK, dy)
+    RefK = RefPointTrackControl(;
+        dy = dy_model, ref_pos = dy_model.l, delta_t, kp = 1.0, ki = 0.0, kd = 0.5)
+    central = FormationControl(formation, RefK, dy_model)
 
     formation = rotate_formation(formation, 0°)
     init = map(1:N) do i 
@@ -209,13 +215,13 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         x, zero(Z), zero(U)
     end
 
-    world_model = WorldDynamics(fill((dy, StaticObsDynamics()), N))
-    # framework = NaiveCF(X, Z, N, central, delay_model.com)
+    world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
+    # framework = NaiveCF(X, Z, N, central, delays_model.com)
     framework = let 
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delay_model, x_weights, u_weights; 
-            X, Z, N, H, loss_tol = 1e-4)
+        OvCF(central, world_model, delays_model, x_weights, u_weights; 
+            X, Z, N, H)
     end
 
     comps = ["x", "y", "θ", "ψ", "v"]
@@ -224,9 +230,10 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
         hcat(((p -> getfield(p,c)).(xs) for c in comps)...)
     end
 
-    world = [(dy, leader_z_dy); fill((dy, StaticObsDynamics()), N-1)] |> WorldDynamics
+    world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
+            |> WorldDynamics)
     result, logs = simulate(
-        world, real_delay_model, framework, init, (comps, record_f), 1:t_end)
+        world, delays_actual, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_formation(result, freq, central) |> display
