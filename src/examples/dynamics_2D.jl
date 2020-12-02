@@ -50,7 +50,7 @@ function u_from_v_ω(v, ω, dy::CarDynamics)
 end
 
 
-function limit_control(dy::CarDynamics, u::U)::U where {U}
+function OneVision.limit_control(dy::CarDynamics, u::U, x, t)::U where {U}
     v̂, ψ̂ = u
     v̂1 = clamp(v̂, -dy.max_v, dy.max_v)
     ψ̂1 = clamp(ψ̂, -dy.max_ψ, dy.max_ψ)
@@ -76,8 +76,6 @@ end
 end
 
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
-    u = limit_control(dy, u)
-
     N = 1
     dt = dy.delta_t / N
     @inline f(x) = sys_derivates(dy, x, u)

@@ -53,15 +53,16 @@ function follow_path_optim(
 
     function loss(uvec)
         R = eltype(uvec)
-        u::SMatrix{n_u,H,R} = reshape(uvec, (n_u, H))
+        us::SMatrix{n_u,H,R} = reshape(uvec, (n_u, H))
         x::SVector{n_x,R} = x0
         l_x = @SVector zeros(R, n_x)
         l_u = @SVector zeros(R, n_u)
 
         for t = 1:H
-            x = sys_forward(p.dy, x, u[:,t], τ + t - 1)
+            u = limit_control(p.dy, us[:,t], x, τ + t - 1)
+            x = sys_forward(p.dy, x, u, τ + t - 1)
             l_x += (x .- x_path[:, t]).^2 
-            l_u += (u[:,t] .- u_path[:,t]).^2 
+            l_u += (us[:,t] .- u_path[:,t]).^2 
         end
         sum(l_x .* p.x_weights) + sum(l_u .* p.u_weights)
     end

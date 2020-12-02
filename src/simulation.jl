@@ -142,6 +142,7 @@ function simulate_impl(
             z = pushpop!(a.obs_queue, zs[i])
             ms = first(a.msg_queue)
             u, ms′ = control!(a.controller, x, z, ms)
+            u = limit_control(world_dynamics.dynamics[i], u, x, t)
             us[i] = pushpop!(a.act_queue, u)
             transmition[:,i] = ms′
         end

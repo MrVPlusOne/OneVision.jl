@@ -1,7 +1,7 @@
 export ℝ, ℕ, 𝕋, Each
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
 export ObsDynamics, StaticObsDynamics
-export sys_forward, sys_A, sys_B, sys_w, obs_forward
+export sys_forward, limit_control, sys_A, sys_B, sys_w, obs_forward
 export DelayModel, WorldDynamics 
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
@@ -20,11 +20,22 @@ Each{T} = Vector{T}
 
 """
 A state dynamics model.
+
+ - Should implement: `sys_forward`
+ - Can optionally implement: `limit_control`
 """
 abstract type SysDynamics end
 
 "Simulate one time step forward using the system dynamics.\n"
 function sys_forward(dy::SysDynamics, x::X, u, t::𝕋)::X where {X} @require_impl end
+
+"""
+    Restrict controls output by π into some valid range. The default implementation 
+    simply returns the original control unmodified.
+"""
+function limit_control(dy::SysDynamics, u::U, x, t)::U where {U}
+    u
+end
 
 """
 A time-variant linear dynamics of the form ``x(t+1) = A(t) x(t) + B(t) u(t) + w(t)``.
@@ -115,7 +126,7 @@ Should implement `control_one` and `init_state`.
 abstract type CentralControl{U,S} end
 
 function control_one(
-    f::CentralControl{U,S}, s::S, xs, zs, t::𝕋, id::ℕ
+    π::CentralControl{U,S}, s::S, xs, zs, t::𝕋, id::ℕ
 )::U  where {U,S}
     @require_impl
 end
