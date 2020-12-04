@@ -10,6 +10,7 @@ using Setfield: @set
 using QuadGK: quadgk
 using Parameters: @unpack
 using StaticArrays
+using MacroTools: @capture
 
 "A placeholder for unimplmeneted code."
 macro todo()
@@ -58,14 +59,8 @@ function unzip_impl(a)
     map(x -> getfield.(a, x), fieldnames(eltype(a)))
 end
 
-# todo: add docs and tests
 function type_transpose(ty::Expr)::Expr
-    @assert ty.head == :curly
-    h1 = ty.args[1]
-    inner = ty.args[2]
-    @assert inner.head == :curly
-    h2 = inner.args[1]
-    elems = inner.args[2:end]
+    @capture(ty, h1_{h2_{elems__}})
     rs = map(x -> :($h1{$x}), elems)
     :($h2{$(rs...)})
 end

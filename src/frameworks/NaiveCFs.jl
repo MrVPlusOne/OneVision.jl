@@ -8,11 +8,11 @@ end
 struct NaiveCF{X,Z,U,S} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z},Nothing}
     num_agents::ℕ
     central::CentralControl{U,S}
-    msg_delay::ℕ
+    msg_queue_len::ℕ
 end
 
-NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_delay) where {U,S} = 
-    NaiveCF{X,Z,U,S}(N, central, msg_delay)
+NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_queue_len) where {U,S} = 
+    NaiveCF{X,Z,U,S}(N, central, msg_queue_len)
 
 mutable struct NaiveController{X,Z,U,S} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
     self::ℕ
@@ -52,7 +52,7 @@ function OneVision.make_controllers(
     end
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]
-        constant_queue(receives, framework.msg_delay)
+        constant_queue(receives, framework.msg_queue_len)
     end
     msgs = ntuple(_ -> init_msg(), framework.num_agents)
     ctrls, msgs

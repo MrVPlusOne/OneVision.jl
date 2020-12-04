@@ -62,6 +62,13 @@ end
     msg_queue::MsgQueue{Msg}
     controller::Controller{X,Z,U,Msg,Log}
 end
+
+function shorten_queue(q, len)
+    @assert(len ≤ length(q), 
+        "Actual communication delay ($len) should ≤ the modeled delay ($(length(q))).")
+    to_drop = length(q) - len
+    FixedQueue(collect(drop(collect(q), to_drop)))
+end
   
 
 """
@@ -85,74 +92,62 @@ function simulate(
     recorder::Tuple{Vector{String},Function},
     times::AbstractVector{𝕋},
 )::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
-    (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
-
-    function shorten_queue(q, len)
-        @assert len ≤ length(q) "Actual communication delay should ≤ the modeled delay."
-        to_drop = length(q) - len
-        FixedQueue(collect(drop(collect(q), to_drop)))
-    end
-    
-    make_agent(id::ℕ)::AgentState = begin
-        (x₀, z₀, u₀) = init_status[id]
-        AgentState(
-            state_queue = constant_queue(x₀, delay_model.obs),
-            obs_queue = constant_queue(z₀, delay_model.obs),
-            act_queue = constant_queue(u₀, delay_model.act),
-            msg_queue = shorten_queue(msg_qs[id], delay_model.com),
-            controller = controllers[id],
-        )
-    end
-    simulate_impl(
-        world_dynamics,
-        map(make_agent, SVector{N}(1:N)),
-        SVector{N}(init_status),
-        recorder,
-        times,
-    )
-end
-
-"""
-A sumulation implementation. It takes in information regarding the simulation and
-return `(results, logs)`.
-
-# Arguments
-
-"""
-function simulate_impl(
-    world_dynamics::WorldDynamics{N},
-    agents::SVector{N,AgentState{X,Z,U,Msg,Log}},
-    init_status::SVector{N,Tuple{X,Z,U}},
-    recorder::Tuple{Vector{String},RF},
-    times,
-) where {X,Z,U,Msg,Log,RF,N}
     @assert !isempty(times)
     @assert isbitstype(Msg) "Msg = $Msg"
-    Each = MVector{N}
 
-    xs, zs, us = @unzip(MVector(init_status), Each{Tuple{X,Z,U}})
-    result = TrajectoryData(times, N, recorder[1])
+    t0 = times[1]
+    ΔT = delay_model.ctrl_interval
+    is_control_time(t) = mod(t - t0, ΔT) == 0
+    is_obs_time(t) = mod(t + delay_model.obs - t0, ΔT) == 0
+    is_act_time(t) = mod(t - delay_model.act - t0, ΔT) == 0
+    is_msg_time(t) = mod(t - delay_model.com - t0, ΔT) == 0
+
+    xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
+
+    (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
+    # the head of these queues corresponding to values that are currently taking effect
+    msg_qs = shorten_queue.(msg_qs, delay_model.com ÷ ΔT + 1)
+    state_qs = SVector{N}(constant_queue.(xs, delay_model.obs ÷ ΔT + 1))
+    obs_qs = SVector{N}(constant_queue.(zs, delay_model.obs ÷ ΔT + 1))
+    act_qs = SVector{N}(constant_queue.(us, delay_model.act ÷ ΔT + 1))
+
+    result = TrajectoryData(times, N, recorder[1])  # TODO: replace with callbacks
     data_idx = 1
+
+    # we store the newest messages/actions into these caches and wait until 
+    # the next control/actuation step to push them into the queues.
+    msg_cache = MMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
+    act_cache = MVector{N, U}(first.(act_qs))
     for t in times[1]:times[end]
-        # observe, control, and send messages
-        transmition = MMatrix{N,N,Msg}(undef)  # indexed by (receiver, sender)
-        for i in 1:length(agents)  # unroll away dynamic dispatch at compile time!
-            a = agents[i]
-            x = pushpop!(a.state_queue, xs[i])
-            z = pushpop!(a.obs_queue, zs[i])
-            ms = first(a.msg_queue)
-            u, ms′ = control!(a.controller, x, z, ms)
-            u = limit_control(world_dynamics.dynamics[i], u, x, t)
-            us[i] = pushpop!(a.act_queue, u)
-            transmition[:,i] = ms′
+        if is_obs_time(t)
+            # we don't need cahces here since they will only be used at the next
+            # control step anyway.
+            pushpop!.(state_qs, xs)
+            pushpop!.(obs_qs, zs)
         end
-        # receive messagees and update world states
-        for i in 1:length(agents)
-            a = agents[i]
-            pushpop!(a.msg_queue, convert(Vector{Msg}, transmition[i,:]))
-            xs[i] = sys_forward(world_dynamics.dynamics[i], xs[i], us[i], t)
-            zs[i] = obs_forward(world_dynamics.obs_dynamics[i], xs[i], zs[i], t)
+        if is_msg_time(t)
+            for i in SOneTo(N)
+                pushpop!(msg_qs[i], convert(Vector{Msg}, msg_cache[:, i]))
+            end
         end
+        if is_control_time(t)
+            for i in SOneTo(N)
+                x, z, ms = first.((state_qs[i], obs_qs[i], msg_qs[i]))
+                u, ms′ = control!(controllers[i], x, z, ms)
+                u = limit_control(world_dynamics.dynamics[i], u, x, t)
+                msg_cache[i, :] = ms′
+                act_cache[i] = u
+            end
+        end
+        if is_act_time(t)
+            pushpop!.(act_qs, act_cache)
+            us .= first.(act_qs)
+        end
+
+        # update physics
+        xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
+        zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+
         # record results
         if t == times[data_idx]
             data = recorder[2](xs, zs, us)
@@ -162,6 +157,6 @@ function simulate_impl(
             data_idx += 1
         end
     end
-    logs = Dict(i => write_logs(agents[i].controller) for i in 1:N)
+    logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
     result, logs
 end
