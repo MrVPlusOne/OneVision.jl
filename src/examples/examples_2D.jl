@@ -130,7 +130,7 @@ function tracking_example(;freq = 100.0, time_end = 20.0, noise_level=0.0, plot_
         circ_traj[t]
     end
 
-    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, delta_t, kp = 1.0, ki = 1.0)
+    RefK = RefPointTrackControl(;dy, ref_pos = dy.l, ctrl_interval = ΔT * delta_t, kp = 1.0, ki = 1.0)
     # RefK = ConfigTrackControl(;dy, k1 = 2, k2 = 1, k3 = 1)
     central = RefTrackCentralControl(RefK, traj_f)
 
