@@ -1,6 +1,6 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue, @get!
-export °, rotation2D
+export °, rotation2D, to_matrix
 export @kwdef, @_, @set
 
 import DataStructures
@@ -256,3 +256,6 @@ const ° = pi/180
 rotation2D(α) = 
     @SMatrix [cos(α) -sin(α)
               sin(α)  cos(α)]
+
+to_matrix(xs::AbstractVector{X}) where X = 
+    [x[i] for x in xs, i in 1:length(X)]

@@ -1,8 +1,8 @@
-export ℝ, ℕ, 𝕋, Each
+export ℝ, ℕ, 𝕋, Each, round_ceil, round_floor
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
 export ObsDynamics, StaticObsDynamics
 export sys_forward, limit_control, sys_A, sys_B, sys_w, obs_forward
-export DelayModel, WorldDynamics 
+export DelayModel, WorldDynamics, msg_queue_length
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
@@ -11,6 +11,9 @@ const ℝ = Float64  # use 64-bit precision for real numbers
 const ℕ = Int64
 "The set of discrete times\n"
 const 𝕋 = ℕ
+
+round_ceil(x::ℝ)::ℕ = ℕ(ceil(x))
+round_floor(x::ℝ)::ℕ = ℕ(floor(x))
 
 """
 `Each{T}` is a vector containing elements of type `T`,
@@ -105,16 +108,26 @@ function obs_forward(
 ) z end
 
 struct DelayModel
-    obs::ℕ  # observation delay: Tx
-    act::ℕ  # actuation delay: Tu
-    com::ℕ  # communication delay: Tc
-    total::ℕ
+    "observation delay: Tx"
+    obs::𝕋
+    "actuation delay: Tu" 
+    act::𝕋
+    "communication delay: Tc"
+    com::𝕋
+    "total delay"
+    total::𝕋
+    "control interaval, i.e., the time between adjacent control steps"
+    ΔT::𝕋
 
-    DelayModel(;obs, act, com) = begin 
+    DelayModel(;obs, act, com, ΔT = 1) = begin 
         @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
-        new(obs, act, com, obs + act + com)
+        @assert obs ≥ 0 && act ≥ 0 && ΔT ≥ 1
+        new(obs, act, com, obs + act + com, ΔT)
     end
 end
+
+msg_queue_length(dm::DelayModel) = dm.com ÷ dm.ΔT + 1
+
 
 
 """

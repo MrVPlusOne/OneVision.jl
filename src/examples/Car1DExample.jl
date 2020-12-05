@@ -169,7 +169,7 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
         end
         anim |> display
     end
-    plot_result ? visualize(result; delta_t) : result
+    plot_result ? display(visualize(result; delta_t)) : result
 end
 
 end # Car1DExampleLabeled

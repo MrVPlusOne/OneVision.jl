@@ -103,22 +103,28 @@ function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
 end
 
 
-function tracking_example(;freq = 20.0, time_end = 20.0, plot_result = true)
-    X, Z, U = CarX{ℝ}, Nothing, CarU{ℝ}
+function tracking_example(;freq = 100.0, time_end = 20.0, noise_level=0.0, plot_result = true)
+    X, Z, U = CarX{ℝ}, SVector{0, ℝ}, CarU{ℝ}
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
     # Car dynamics parameters
     dy = CarDynamics(;delta_t, max_ψ = 60°)
+    rng = MersenneTwister(1234)
+    function add_noise(x::X, t)::X where X
+        x + randn(rng, X) * noise_level
+    end
+    dy_actual = @set dy.add_noise = add_noise
     z_dy = StaticObsDynamics()
 
-    delay_model = DelayModel(obs = 3, act = 3, com = 1)
+    delay_model = DelayModel(obs = 3, act = 3, com = 1, ΔT = 5)
+    ΔT = delay_model.ΔT
     H = 20
 
     # reference trajectory to track
     x_ref0 = X(x = 0, y = -0.5, θ = 0.0)
     u_ref0 = U(v̂ = 0.5, ψ̂ = 0.1pi)
-    circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1 + H + delay_model.total)
+    circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1 + H * ΔT + delay_model.total)
     traj_f = FuncT(Tuple{ℕ,𝕋}, CarX{ℝ}) do (id, t)
         t = max(1, t) 
         circ_traj[t]
@@ -133,10 +139,11 @@ function tracking_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end 
 
     N = 1
-    world = WorldDynamics([(dy, z_dy)])
+    world_model = WorldDynamics([(dy, z_dy)])
+    world_actual = WorldDynamics([(dy_actual, z_dy)])
     # framework = NaiveCF{X,Z,U}(N, central, delay_model.com)
     framework = let 
-        world_model = world
+        world_model = world_model
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
         OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H)
@@ -148,7 +155,7 @@ function tracking_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end
 
     result, logs = simulate(
-        world, delay_model, framework, init, (comps, record_f), 1:t_end)
+        world_actual, delay_model, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_tracking(result, freq, circ_traj) |> display
@@ -194,9 +201,10 @@ function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, 
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
     # running at 20Hz
-    delays_model  = DelayModel(obs = 1, act = 1, com = 5, ctrl_interval = 5)
-    delays_actual = DelayModel(obs = 1, act = 1, com = 5, ctrl_interval = 5)
+    delays_model  = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
+    delays_actual = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
     H = 20
+    ΔT = delays_model.ΔT
 
     N = 4
     formation = begin
@@ -207,7 +215,7 @@ function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, 
     end
 
     RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, delta_t, kp = 1.0, ki = 0.5, kd = 0.5)
+        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, kp = 1.0, ki = 0.0, kd = 0.0)
     central = FormationControl(formation, RefK, dy_model)
 
     formation = rotate_formation(formation, 0°)
@@ -217,13 +225,12 @@ function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, 
     end
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
-    framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model))
-    # framework = let 
-    #     x_weights = fill(X(x = 1, y = 1, θ = 1), N)
-    #     u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-    #     OvCF(central, world_model, delays_model, x_weights, u_weights; 
-    #         X, Z, N, H)
-    # end
+    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
+    framework = let 
+        x_weights = fill(X(x = 1, y = 1, θ = 1), N)
+        u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
+        OvCF(central, world_model, delays_model, x_weights, u_weights; X, Z, N, H)
+    end
 
     comps = ["x", "y", "θ", "ψ", "v"]
     function record_f(xs, zs, us)
