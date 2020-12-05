@@ -81,7 +81,8 @@ let
         world = WorldDynamics(fill((sys, NoObs()), 2))
         s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
         s2 = (CarX(2.0, 0.0), CarZ(0.0, 0.0))
-        prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; Hf = HΔT)
+        prob = ForwardPredictProblem(world, RendezvousControl(); 
+            X = CarX{ℝ}, Z = CarZ{ℝ}, Hf = HΔT)
         u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0, ΔT)
         plot(
             plot(1:HΔT, to_matrix(x_traj[:,1]); label = ["x1" "v1"]),
@@ -103,10 +104,10 @@ let
 end # Double integrater let
 
 @testset "Integration tests" begin
-    Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = true)
+    Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = false)
     @test true
-    Car2DExamples.tracking_example(time_end = 3, plot_result = true)
+    Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false)
     @test true
-    Car2DExamples.formation_example(time_end = 3, plot_result = true)
+    Car2DExamples.formation_example(time_end = 3, noise_level = 0.001, plot_result = false)
     @test true
 end

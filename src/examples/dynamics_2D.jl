@@ -37,6 +37,7 @@ end
     k_ψ::ℝ = 5.0
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
+    integrator_samples::ℕ = 1
 end
 
 ψ_from_v_ω(v, ω, l) = abs(v) < 0.1 ? atan(ω * l, v) :  atan(ω * l / v)
@@ -76,7 +77,7 @@ end
 end
 
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
-    N = 2
+    N = dy.integrator_samples
     dt = dy.delta_t / N
     @inline f(x) = sys_derivates(dy, x, u)
 

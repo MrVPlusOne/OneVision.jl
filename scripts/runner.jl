@@ -16,7 +16,8 @@ AbstractPlotting.__init__()
 AbstractPlotting.inline!(false)
 
 # Car2DExamples.tracking_example(time_end=20, noise_level = 0.003, plot_result=true)
-Car2DExamples.formation_example(time_end=10, noise_level = 0.003, plot_result=true)
+Car2DExamples.formation_example(time_end=20, noise_level = 0.003, plot_result=true)
+
 
 import OneVision.Car1DExample
 Car1DExample.run_example(1:20 * 20, 20.0; noise=0.0, plot_result=true)
