@@ -6,6 +6,7 @@ using AbstractPlotting.MakieLayout
 using StaticArrays
 using Unrolled
 using Base.Iterators: drop
+using ColorSchemes
 
 @kwdef struct TrajectoryData
     times::Vector{𝕋}
@@ -45,8 +46,10 @@ function visualize(
     axes = map(enumerate(result.components)) do (c_id, comp)
         ax = LAxis(scene; title = comp, xlabel)
         ys = result.values[:,:,c_id]
-        for j in 1:size(ys, 2)
-            lines!(ax, times, ys[:,j])
+        N = size(ys, 2)
+        for j in 1:N
+            lines!(ax, times, ys[:,j], linewidth=2,
+                color = get(ColorSchemes.rainbow, j / N))
         end
         layout[c_id,1] = ax
     end
@@ -96,7 +99,7 @@ function simulate(
     @assert isbitstype(Msg) "Msg = $Msg"
 
     t0 = times[1]
-    ΔT = delay_model.ctrl_interval
+    ΔT = delay_model.ΔT
     is_control_time(t) = mod(t - t0, ΔT) == 0
     is_obs_time(t) = mod(t + delay_model.obs - t0, ΔT) == 0
     is_act_time(t) = mod(t - delay_model.act - t0, ΔT) == 0
@@ -144,10 +147,6 @@ function simulate(
             us .= first.(act_qs)
         end
 
-        # update physics
-        xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
-        zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
-
         # record results
         if t == times[data_idx]
             data = recorder[2](xs, zs, us)
@@ -156,6 +155,10 @@ function simulate(
             result.values[data_idx, :, :] = data
             data_idx += 1
         end
+
+        # update physics
+        xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
+        zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
     result, logs

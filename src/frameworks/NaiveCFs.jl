@@ -9,14 +9,15 @@ struct NaiveCF{X,Z,U,S} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z},Nothing}
     num_agents::ℕ
     central::CentralControl{U,S}
     msg_queue_len::ℕ
+    ΔT::𝕋
 end
 
-NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_queue_len) where {U,S} = 
-    NaiveCF{X,Z,U,S}(N, central, msg_queue_len)
+NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_queue_len, ΔT) where {U,S} = 
+    NaiveCF{X,Z,U,S}(N, central, msg_queue_len, ΔT)
 
 mutable struct NaiveController{X,Z,U,S} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
     self::ℕ
-    central::CentralControl{U,S}
+    cf::NaiveCF{X,Z,U,S}
     "Central control state."
     s_c::S
     t::𝕋
@@ -32,10 +33,11 @@ function OneVision.control!(
     msgs::Each{NaiveMsg{X,Z}},
 )::Tuple{U,Each{NaiveMsg{X,Z}}} where {X,Z,U}
     msgs[ctrl.self] = NaiveMsg(x, z)
+    @unpack ΔT, central = ctrl.cf
     xs = [m.x for m in msgs]
     zs = [m.z for m in msgs]
-    ctrl.t += 1
-    u = control_one(ctrl.central, ctrl.s_c, xs, zs, ctrl.t, ctrl.self)
+    ctrl.t += ΔT
+    u = control_one(central, ctrl.s_c, xs, zs, ctrl.t, ctrl.self)
     msgs′ = fill(NaiveMsg(x, z), length(msgs))
     u, msgs′
 end
@@ -48,7 +50,7 @@ function OneVision.make_controllers(
     central = framework.central
     s_c = init_state(central)
     ctrls = ntuple(framework.num_agents) do i
-        NaiveController{X,Z,U,S}(i, central, s_c, init_t - 1)
+        NaiveController{X,Z,U,S}(i, framework, s_c, init_t - 1)
     end
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]

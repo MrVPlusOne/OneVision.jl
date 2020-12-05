@@ -32,29 +32,34 @@ end
 let
     dt = 0.1
     H = 20  # horizon
+    ΔT = 5  # control interval
+    HΔT = H * ΔT
     sys = car_system(dt)
 
     @testset "Path tracking test" begin
-        x_weights = @SVector [5.0, 2.0]
-        u_weights = @SVector [0.1]
+        x_weights = CarX(5.0, 2.0)
+        u_weights = CarU(0.1)
 
-        prob = PathFollowingProblem(
+        prob = TrajPlanningProblem(
             H,
+            ΔT,
             sys,
             x_weights,
             u_weights,
         )
-        x0 = SVector(CarX(-1.0, -1.0))
+        x0 = CarX(-1.0, -1.0)
 
-        x_path = SMatrix{2,H,ℝ}(hcat(fill(CarX(1.0, 0.0), H)...))
-        u_path = SMatrix{1,H,ℝ}(hcat(fill(CarU(0.0), H)...))
+        x_path = SVector{HΔT}(fill(CarX(1.0, 0.0), HΔT))
+        u_path = SVector{HΔT}(fill(CarU(0.0), HΔT))
         t0 = 0
-        u, obj = follow_path_optim(prob, x0, x_path, u_path, t0)
-        x = x_path_from_u(x0, t0, u_path, prob.dy)
-        times = (1:H) * dt
+        u, obj = plan_trajectory(prob, x0, x_path, u_path, t0)
+        x = x_path_from_u(x0, t0, u, prob.dy, Val(ΔT))
+        u_times = (1:H)*(dt * ΔT)
+        x_times = (1:HΔT) * dt
+        x_data = hcat(to_matrix(x), to_matrix(x_path))
         plot(
-            plot(times, u'; label = "u"),
-            plot(times, hcat(x', x_path'); label = ["x" "v" "x*" "v*"]),
+            plot(u_times, first.(u); label = "u"),
+            plot(x_times, x_data; label = ["x" "v" "x*" "v*"]),
             layout = (2, 1),
             size = (500, 300 * 3),
         ) |> display
@@ -75,19 +80,24 @@ let
         N = 2
         world = WorldDynamics(fill((sys, NoObs()), 2))
         s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
-        s2 = (CarX(2.0, 1.0), CarZ(0.0, 0.0))
-        prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; H)
-        u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0)
-        y_data = hcat(x_traj[:,1]...)'
-        plot(1:H, y_data; label = ["x1", "v1"]) |> display
+        s2 = (CarX(2.0, 0.0), CarZ(0.0, 0.0))
+        prob = ForwardPredictProblem(world, RendezvousControl(), s1[1], s1[2]; Hf = HΔT)
+        u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0, ΔT)
+        plot(
+            plot(1:HΔT, to_matrix(x_traj[:,1]); label = ["x1" "v1"]),
+            plot(1:HΔT, to_matrix(u_traj[:,1]); label = ["u1"]),
+            layout = (2, 1),
+            size = (500, 300*2),
+        ) |> display
         @test true
     end
 
     @testset "Self estimation" begin
         s0 = CarX(0.0, 0.0), 0
-        u_history = [CarU(0.1i) for i in 1:10]
+        times = 1:1000
+        u_history = [CarU(sin(t/100)) for t in times]
         xs = self_estimate(sys, s0, u_history)
-        plot(1:10, hcat(xs...)'; label = ["x" "v"]) |> display
+        plot(times * dt, to_matrix(xs); label = ["x" "v"]) |> display
         @test true
     end
 end # Double integrater let
@@ -95,6 +105,8 @@ end # Double integrater let
 @testset "Integration tests" begin
     Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = true)
     @test true
-    Car2DExamples.run_example(time_end = 3, plot_result = true)
+    Car2DExamples.tracking_example(time_end = 3, plot_result = true)
+    @test true
+    Car2DExamples.formation_example(time_end = 3, plot_result = true)
     @test true
 end
