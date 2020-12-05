@@ -164,7 +164,7 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
     dy.external_u(t)
 end
 
-function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
+function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, plot_result = true)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = U
     t_end = 𝕋(ceil(time_end * freq))
@@ -174,7 +174,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
-        x + randn(rng, X) * 0.005
+        x + randn(rng, X) * noise_level
     end
     dy_actual = @set dy_model.add_noise = add_noise
 
@@ -193,8 +193,9 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end
     leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
 
-    delays_model  = DelayModel(obs = 0, act = 0, com = 1)
-    delays_actual = DelayModel(obs = 0, act = 0, com = 1)
+    # running at 20Hz
+    delays_model  = DelayModel(obs = 1, act = 1, com = 5, ctrl_interval = 5)
+    delays_actual = DelayModel(obs = 1, act = 1, com = 5, ctrl_interval = 5)
     H = 20
 
     N = 4
@@ -206,7 +207,7 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end
 
     RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, delta_t, kp = 1.0, ki = 0.0, kd = 0.5)
+        dy = dy_model, ref_pos = dy_model.l, delta_t, kp = 1.0, ki = 0.5, kd = 0.5)
     central = FormationControl(formation, RefK, dy_model)
 
     formation = rotate_formation(formation, 0°)
@@ -216,13 +217,13 @@ function formation_example(;freq = 20.0, time_end = 20.0, plot_result = true)
     end
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
-    # framework = NaiveCF(X, Z, N, central, delays_model.com)
-    framework = let 
-        x_weights = fill(X(x = 1, y = 1, θ = 1), N)
-        u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delays_model, x_weights, u_weights; 
-            X, Z, N, H)
-    end
+    framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model))
+    # framework = let 
+    #     x_weights = fill(X(x = 1, y = 1, θ = 1), N)
+    #     u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
+    #     OvCF(central, world_model, delays_model, x_weights, u_weights; 
+    #         X, Z, N, H)
+    # end
 
     comps = ["x", "y", "θ", "ψ", "v"]
     function record_f(xs, zs, us)
