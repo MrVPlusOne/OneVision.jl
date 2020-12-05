@@ -45,17 +45,17 @@ function plan_trajectory(
         us::SMatrix{n_u,H,R} = reshape(uvec, (n_u, H))
         XR, UR = similar_type(X, R), similar_type(U, R)
         x::XR = x0
-        l_x = zero(XR)
-        l_u = zero(UR)
+        l_x::XR = zero(XR)
+        l_u::UR = zero(UR)
 
         for j = 0:H - 1
-            u::UR = us[:,j + 1]
-            u = limit_control(p.dy, u, x, τ + j * ΔT)
+            u0::UR = us[:,j + 1]
+            u = limit_control(p.dy, u0, x, τ + j * ΔT)
             for k = 0:ΔT - 1
                 t = j * ΔT + k
                 x = sys_forward(p.dy, x, u, τ + t)
-                l_x += (x .- x_path[t + 1]).^2 
-                l_u += (us[:,j + 1] .- u_path[t + 1]).^2
+                l_x += (x - x_path[t + 1]).^2 
+                l_u += (u0 - u_path[t + 1]).^2
             end
         end
         sum(l_x .* p.x_weights) + sum(l_u .* p.u_weights)
