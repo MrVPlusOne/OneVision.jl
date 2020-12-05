@@ -37,6 +37,7 @@ end
     k_ψ::ℝ = 5.0
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
+    integrator_samples::ℕ = 1
 end
 
 ψ_from_v_ω(v, ω, l) = abs(v) < 0.1 ? atan(ω * l, v) :  atan(ω * l / v)
@@ -76,11 +77,11 @@ end
 end
 
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
-    N = 1
+    N = dy.integrator_samples
     dt = dy.delta_t / N
     @inline f(x) = sys_derivates(dy, x, u)
 
-    x′ = integrate_forward_invariant(f, x, dt, RK38, N)
+    x′ = integrate_forward_invariant(f, x, dt, Euler, N)
     dy.add_noise(x′,t)
 end
 
@@ -94,7 +95,7 @@ abstract type TrackingControl end
     dy::CarDynamics
     "The distance between the reference point and rear axis, positive means forward"
     ref_pos::ℝ
-    delta_t::ℝ
+    ctrl_interval::ℝ
     "Propotional gain"
     kp::ℝ
     "(Discrete) Integral gain"
@@ -135,7 +136,7 @@ function track_refpoint(
     ξ = submap(ξ, :track_refpoint)
     p = ref_point(K, s)
     v_p = let
-        Δt = K.delta_t
+        Δt = K.ctrl_interval
         ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
         dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
         K.kp * (p̂ - p) + ∫edt + v_p̂ 
