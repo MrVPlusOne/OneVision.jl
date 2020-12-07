@@ -1,4 +1,4 @@
-export simulate, TrajectoryData, visualize, AgentState
+export simulate, TrajectoryData, visualize
 
 # using Plots: Plot, plot
 using Makie
@@ -57,14 +57,6 @@ function visualize(
     scene
 end
 
-        
-@kwdef struct AgentState{X,Z,U,Msg,Log}
-    state_queue::FixedQueue{X}
-    obs_queue::FixedQueue{Z}
-    act_queue::FixedQueue{U}
-    msg_queue::MsgQueue{Msg}
-    controller::Controller{X,Z,U,Msg,Log}
-end
 
 function shorten_queue(q, len)
     @assert(len ≤ length(q), 
@@ -72,7 +64,6 @@ function shorten_queue(q, len)
     to_drop = length(q) - len
     FixedQueue(collect(drop(collect(q), to_drop)))
 end
-  
 
 """
 Simulate multiple distributed agents with the given initial states and controllers and 
@@ -84,8 +75,6 @@ the result. The first element in this sequence should be the time of the given i
 - `recorder`: a tuple of the shape `(components::Vector{String}, record_f)`, where 
    `record_f` should takes in `(xs, zs, us)` and returns a real matrix of the size 
    `(num agents, length(components))`.
-- `save_snapshot`: takes in `(id, time, x, z, u)` and returns a bool to indicate whether to
-take a detailed snapshot for the current controller status.
 """
 function simulate(
     world_dynamics::WorldDynamics{N},
@@ -96,9 +85,44 @@ function simulate(
     times::AbstractVector{𝕋},
 )::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
     @assert !isempty(times)
+
+    result = TrajectoryData(times, N, recorder[1])
+    data_idx = 1
+
+    function callback(xs,zs,us,t)
+        if t == times[data_idx]
+            data = recorder[2](xs, zs, us)
+            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
+               * "return a matrix of size (N * Num curves), got size $(size(data))")
+            result.values[data_idx, :, :] = data
+            data_idx += 1
+        end
+    end
+
+    tspan = times[1], times[end]
+    logs = simulate(world_dynamics, delay_model, framework, init_status, callback, tspan)
+    result, logs
+end
+  
+
+"""
+Simulate multiple distributed agents with delayed communication.
+
+# Arguments
+- `callback`: a function of the form `callback(xs,zs,us,t) -> nothing` that runs at
+every time step.
+"""
+function simulate(
+    world_dynamics::WorldDynamics{N},
+    delay_model::DelayModel,
+    framework::ControllerFramework{X,Z,U,Msg,Log},
+    init_status::Each{Tuple{X,Z,U}},
+    callback::Function,
+    tspan::Tuple{𝕋, 𝕋},
+)::Dict{ℕ,Dict{𝕋,Log}} where {X,Z,U,Msg,Log,N}
     @assert isbitstype(Msg) "Msg = $Msg"
 
-    t0 = times[1]
+    t0, tf = tspan
     ΔT = delay_model.ΔT
     is_control_time(t) = mod(t - t0, ΔT) == 0
     is_obs_time(t) = mod(t + delay_model.obs - t0, ΔT) == 0
@@ -107,23 +131,20 @@ function simulate(
 
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
 
-    (controllers, msg_qs) = make_controllers(framework, init_status, times[1])
+    (controllers, msg_qs) = make_controllers(framework, init_status, t0)
     # the head of these queues corresponding to values that are currently taking effect
     msg_qs = shorten_queue.(msg_qs, delay_model.com ÷ ΔT + 1)
     state_qs = SVector{N}(constant_queue.(xs, delay_model.obs ÷ ΔT + 1))
     obs_qs = SVector{N}(constant_queue.(zs, delay_model.obs ÷ ΔT + 1))
     act_qs = SVector{N}(constant_queue.(us, delay_model.act ÷ ΔT + 1))
 
-    result = TrajectoryData(times, N, recorder[1])  # TODO: replace with callbacks
-    data_idx = 1
-
     # we store the newest messages/actions into these caches and wait until 
     # the next control/actuation step to push them into the queues.
     msg_cache = MMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
     act_cache = MVector{N, U}(first.(act_qs))
-    for t in times[1]:times[end]
+    for t in t0:tf
         if is_obs_time(t)
-            # we don't need cahces here since they will only be used at the next
+            # we don't need cahces here since they will only be used in the next
             # control step anyway.
             pushpop!.(state_qs, xs)
             pushpop!.(obs_qs, zs)
@@ -148,18 +169,12 @@ function simulate(
         end
 
         # record results
-        if t == times[data_idx]
-            data = recorder[2](xs, zs, us)
-            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
-               * "return a matrix of size (N * Num curves), got size $(size(data))")
-            result.values[data_idx, :, :] = data
-            data_idx += 1
-        end
+        callback(xs,zs,us,t)
 
         # update physics
         xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
         zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
-    result, logs
+    logs
 end
