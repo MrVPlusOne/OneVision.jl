@@ -171,7 +171,8 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
     dy.external_u(t)
 end
 
-function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, plot_result = true)
+function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
+        dynamics_noise = 0.005, sensor_noise = dynamics_noise)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = U
     t_end = 𝕋(ceil(time_end * freq))
@@ -181,9 +182,13 @@ function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, 
     dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
-        x + randn(rng, X) * noise_level
+        x + CarX(x=0.0, y=0.0, θ=0.0, 
+                v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * dynamics_noise
     end
     dy_actual = @set dy_model.add_noise = add_noise
+    function xs_observer(xs, t)
+        (x -> x + randn(rng, X) * sensor_noise).(xs)
+    end
 
     external_control(t) = begin
         if t ≤ 3 * freq
@@ -241,7 +246,7 @@ function formation_example(;freq = 100.0, time_end = 20.0, noise_level = 0.005, 
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
     result, logs = simulate(
-        world, delays_actual, framework, init, (comps, record_f), 1:t_end)
+        world, delays_actual, framework, init, (comps, record_f), 1:t_end; xs_observer)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_formation(result, freq, central) |> display

@@ -64,45 +64,6 @@ function shorten_queue(q, len)
     to_drop = length(q) - len
     FixedQueue(collect(drop(collect(q), to_drop)))
 end
-
-"""
-Simulate multiple distributed agents with the given initial states and controllers and 
-return `(trajectory data, snapshots)`.
-
-# Arguments
-- `times::Vector{𝕋}`: the time instances at which the simulation should save the states in 
-the result. The first element in this sequence should be the time of the given initial states. 
-- `recorder`: a tuple of the shape `(components::Vector{String}, record_f)`, where 
-   `record_f` should takes in `(xs, zs, us)` and returns a real matrix of the size 
-   `(num agents, length(components))`.
-"""
-function simulate(
-    world_dynamics::WorldDynamics{N},
-    delay_model::DelayModel,
-    framework::ControllerFramework{X,Z,U,Msg,Log},
-    init_status::Each{Tuple{X,Z,U}},
-    recorder::Tuple{Vector{String},Function},
-    times::AbstractVector{𝕋},
-)::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
-    @assert !isempty(times)
-
-    result = TrajectoryData(times, N, recorder[1])
-    data_idx = 1
-
-    function callback(xs,zs,us,t)
-        if t == times[data_idx]
-            data = recorder[2](xs, zs, us)
-            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
-               * "return a matrix of size (N * Num curves), got size $(size(data))")
-            result.values[data_idx, :, :] = data
-            data_idx += 1
-        end
-    end
-
-    tspan = times[1], times[end]
-    logs = simulate(world_dynamics, delay_model, framework, init_status, callback, tspan)
-    result, logs
-end
   
 
 """
@@ -118,7 +79,9 @@ function simulate(
     framework::ControllerFramework{X,Z,U,Msg,Log},
     init_status::Each{Tuple{X,Z,U}},
     callback::Function,
-    tspan::Tuple{𝕋, 𝕋},
+    tspan::Tuple{𝕋, 𝕋};
+    xs_observer = (xs, t) -> xs,
+    zs_observer = (zs, t) -> zs,
 )::Dict{ℕ,Dict{𝕋,Log}} where {X,Z,U,Msg,Log,N}
     @assert isbitstype(Msg) "Msg = $Msg"
 
@@ -146,8 +109,8 @@ function simulate(
         if is_obs_time(t)
             # we don't need cahces here since they will only be used in the next
             # control step anyway.
-            pushpop!.(state_qs, xs)
-            pushpop!.(obs_qs, zs)
+            pushpop!.(state_qs, xs_observer(xs, t))
+            pushpop!.(obs_qs, zs_observer(zs, t))
         end
         if is_msg_time(t)
             for i in SOneTo(N)
@@ -178,3 +141,52 @@ function simulate(
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
     logs
 end
+
+"""
+Simulate multiple distributed agents with the given initial states and controllers and 
+return `(trajectory data, snapshots)`.
+
+# Arguments
+- `times::Vector{𝕋}`: the time instances at which the simulation should save the states in 
+the result. The first element in this sequence should be the time of the given initial states. 
+- `recorder`: a tuple of the shape `(components::Vector{String}, record_f)`, where 
+   `record_f` should takes in `(xs, zs, us)` and returns a real matrix of the size 
+   `(num agents, length(components))`.
+"""
+function simulate(
+    world_dynamics::WorldDynamics{N},
+    delay_model::DelayModel,
+    framework::ControllerFramework{X,Z,U,Msg,Log},
+    init_status::Each{Tuple{X,Z,U}},
+    recorder::Tuple{Vector{String},Function},
+    times::AbstractVector{𝕋};
+    kwargs...
+)::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
+    @assert !isempty(times)
+
+    result = TrajectoryData(times, N, recorder[1])
+    data_idx = 1
+
+    function callback(xs,zs,us,t)
+        if t == times[data_idx]
+            data = recorder[2](xs, zs, us)
+            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
+               * "return a matrix of size (N * Num curves), got size $(size(data))")
+            result.values[data_idx, :, :] = data
+            data_idx += 1
+        end
+    end
+
+    tspan = times[1], times[end]
+    logs = simulate(world_dynamics, delay_model, framework, init_status, 
+        callback, tspan; kwargs...)
+    result, logs
+end
+
+"""
+# Keyword Arguments
+- `xs_observer::Function = (xs, t) -> xs`: the state observation function that transforms
+the true agent state into the state observed by its controller.
+- `zs_observer::Function = (zs, t) -> zs`: similar to `xs_observer`.
+"""
+simulate

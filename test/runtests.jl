@@ -108,6 +108,6 @@ end # Double integrater let
     @test true
     Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false)
     @test true
-    Car2DExamples.formation_example(time_end = 3, noise_level = 0.001, plot_result = false)
+    Car2DExamples.formation_example(time_end = 3, dynamics_noise = 0.001, plot_result = false)
     @test true
 end
