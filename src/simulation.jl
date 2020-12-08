@@ -92,6 +92,7 @@ function simulate(
     is_act_time(t) = mod(t - delay_model.act - t0, ΔT) == 0
     is_msg_time(t) = mod(t - delay_model.com - t0, ΔT) == 0
 
+    # the *actual* state, observation, and actuation at the current time step
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
 
     (controllers, msg_qs) = make_controllers(framework, init_status, t0)
@@ -102,7 +103,7 @@ function simulate(
     act_qs = SVector{N}(constant_queue.(us, delay_model.act ÷ ΔT + 1))
 
     # we store the newest messages/actions into these caches and wait until 
-    # the next control/actuation step to push them into the queues.
+    # the next control/actuation step to push them into the queues to take effect.
     msg_cache = MMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
     act_cache = MVector{N, U}(first.(act_qs))
     for t in t0:tf
@@ -166,6 +167,7 @@ function simulate(
 
     result = TrajectoryData(times, N, recorder[1])
     data_idx = 1
+    tspan = times[1], times[end]
 
     function callback(xs,zs,us,t)
         if t == times[data_idx]
@@ -177,16 +179,9 @@ function simulate(
         end
     end
 
-    tspan = times[1], times[end]
     logs = simulate(world_dynamics, delay_model, framework, init_status, 
         callback, tspan; kwargs...)
     result, logs
 end
 
-"""
-# Keyword Arguments
-- `xs_observer::Function = (xs, t) -> xs`: the state observation function that transforms
-the true agent state into the state observed by its controller.
-- `zs_observer::Function = (zs, t) -> zs`: similar to `xs_observer`.
-"""
-simulate
+end

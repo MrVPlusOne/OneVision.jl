@@ -22,8 +22,7 @@ function live_demo()
     params_layout = layout[1,2] = GridLayout()
     ax_view = layout[1,1] = LAxis(
         scene, title = "Scene", aspect = DataAspect(), 
-        backgroundcolor = RGBf0(0.98, 0.98, 0.98),
-        xrectzoom = false, yrectzoom= false)
+        backgroundcolor = RGBf0(0.98, 0.98, 0.98))
     controls_layout = layout[2,1] = GridLayout()
     colsize!(layout, 1, Relative(3/4))
     rowsize!(layout, 1, Relative(4/5))
@@ -71,7 +70,7 @@ function live_demo()
     leader_z_dy = FormationObsDynamics(external_control)
 
     # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
+    delays_model  = DelayModel(obs = 3, act = 15, com = 5, ΔT = 5)
     delays_actual = delays_model
     H = 20
     ΔT = delays_model.ΔT
@@ -126,9 +125,26 @@ function live_demo()
     end
 
     xs_node = Node((p -> p[1]).(init))
+    traj_len = round_ceil(freq * 5)
+    traj_qs = [Node(constant_queue(init[i][1], traj_len)) for i in 1:N]
     colors = [get(ColorSchemes.Spectral_10, i/N) for i in 1:N]
-    begin
-         # draw cars
+    let
+        # draw trajectories
+        for id in 1:N
+            q = traj_qs[id]
+            traj_x = @lift [x.x for x in $q]
+            traj_y = @lift [x.y for x in $q]
+            on(xs_node) do xs
+                pushpop!(q[], xs[id])
+                q[] = q[]
+            end
+            @unpack r, g, b = colors[id]
+            cmap = [RGBAf0(r, g, b, 0.4), RGBAf0(r, g, b, 1)]
+            color = range(0, 1, length = traj_len)
+            # cam = Makie.cam2d!(ax_view.scene, panbutton = Mouse.left, selectionbutton = (Keyboard.space, Mouse.right))
+            lines!(ax_view, traj_x, traj_y; color, colormap = cmap, linewidth=3)
+        end
+        # draw cars
         for id in 1:N
             car = @lift let 
                 @unpack x, y, θ = $xs_node[id]
