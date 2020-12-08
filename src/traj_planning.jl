@@ -71,7 +71,9 @@ function plan_trajectory(
         p.optim_options,
         autodiff = :forward,
     )
-    @assert Optim.converged(res) "Optim not converged: $res"
+    if !Optim.converged(res)
+        @warn "Optim not converged: $res"
+    end
 
     uvec = Optim.minimizer(res)
     n_u = length(U)
