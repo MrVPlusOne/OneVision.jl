@@ -1,23 +1,11 @@
 log_range(lb,ub,n) = exp.(range(log(lb), log(ub); length = n))
+
 quadratic_range(ub,n; reverse=false) = let f(x) = sign(x) * x^2 * ub
     l, r = reverse ? (1,-1) : (-1,1)
     f.(range(l, r; length=n))
 end
 
-function refpoint_from_mouse(scene, clock) 
-    last_pos = SVector{2, ℝ}(scene.events.mouseposition[])
-    rp = Node((last_pos, zero(last_pos)))
-    on(clock) do _
-        x = SVector{2, ℝ}(scene.events.mouseposition[])
-        v = x - last_pos
-        rp[] = (x, v)
-        last_pos = x
-    end 
-    rp
-end
-
-
-function live_demo(;dynamics_noise = 0.005, sensor_noise = dynamics_noise)
+function live_demo()
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = U
     freq = 100.0
@@ -41,9 +29,9 @@ function live_demo(;dynamics_noise = 0.005, sensor_noise = dynamics_noise)
     rowsize!(layout, 1, Relative(4/5))
 
     dy_noise_control = mk_silder!(
-        "dynamics noise", log_range(1e-5, 1e-2, 100), params_layout)
+        "dynamics noise", log_range(1e-5, 1e-1, 100), params_layout)
     sensor_noise_control = mk_silder!(
-        "sensor noise", log_range(1e-5, 1e-2, 100), params_layout)
+        "sensor noise", log_range(1e-5, 1e-1, 100), params_layout)
 
     params = (
         dy_noise = dy_noise_control.value, 
@@ -59,7 +47,7 @@ function live_demo(;dynamics_noise = 0.005, sensor_noise = dynamics_noise)
     dy_actual = @set dy_model.add_noise = add_noise
     
     function xs_observer(xs, t)
-        (x -> x + randn(rng, X) * sensor_noise).(xs)
+        (x -> x + randn(rng, X) * params.sensor_noise[]).(xs)
     end
 
     @unpack max_v, max_ψ = dy_actual
@@ -89,22 +77,44 @@ function live_demo(;dynamics_noise = 0.005, sensor_noise = dynamics_noise)
     ΔT = delays_model.ΔT
 
     N = 4
-    formation = begin
+    triangle_formation = let
         l = 0.5
         Δϕ = 360° / (N-1) 
         circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
         [[zero(X)]; circle]
     end
+    horizontal_formation = let
+        l = 0.5
+        leader_idx = round_ceil(N/2)
+        line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+    vertical_formation = let
+        l = 0.5
+        leader_idx = round_ceil(N/2)
+        line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+    formation_names = ["triangle", "horizontal", "vertical"]
+    formation_map = Dict{String, Formation{ℝ}}(zip(formation_names, 
+        [triangle_formation, horizontal_formation, vertical_formation]))
+    formation_control = controls_layout[0, 1] = LMenu(
+        scene, direction = :up, 
+        options = formation_names, selection = formation_names[1])
+
+    formation_f() = formation_map[formation_control.selection[]]
 
     RefK = RefPointTrackControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
         kp = 1.0, ki = 0, kd = 0)
-    central = FormationControl(formation, RefK, dy_model)
+    central = FormationControl((_, _) -> formation_f(), RefK, dy_model)
 
-    formation = rotate_formation(formation, 0°)
-    init = map(1:N) do i 
-        x = formation[i]
-        x, zero(Z), zero(U)
+    init = let 
+        formation = rotate_formation(formation_f(), 0°)
+        map(1:N) do i 
+            x = formation[i]
+            x, zero(Z), zero(U)
+        end
     end
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
@@ -130,7 +140,7 @@ function live_demo(;dynamics_noise = 0.005, sensor_noise = dynamics_noise)
         refpoints = @lift let
             ctrl = central
             leader = $xs_node[1]
-            @_ (ctrl.formation 
+            @_ (formation_f()
                 |> map(ref_point(ctrl.K, _),__) 
                 |> map(to_formation_frame(ctrl, leader), __))
         end

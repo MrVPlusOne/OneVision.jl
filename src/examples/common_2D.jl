@@ -1,14 +1,3 @@
-using OneVision.NumericalIntegration
-using OneVision.SymbolMaps
-using OneVision: @set, @_
-
-using AbstractPlotting
-using Makie
-using AbstractPlotting.MakieLayout
-using Printf: @sprintf
-import ColorSchemes
-import Dates
-
 @kwdef struct CarX{R} <: FieldVector{5,R}
     "x position"
     x::R
@@ -218,8 +207,9 @@ end
 """
 Leader-follower formation control
 """
-struct FormationControl <: CentralControl{CarU{ℝ}, SymbolMap}
-    formation::Formation{ℝ}
+struct FormationControl{F} <: CentralControl{CarU{ℝ}, SymbolMap}
+    "formation(xs, t)::Formation{ℝ}"
+    formation::F
     K::RefPointTrackControl
     dy::CarDynamics
 end
@@ -243,11 +233,12 @@ end
 
 function formation_controller(ctrl, ξ, xs, zs, t)
     formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
+    form = ctrl.formation(xs, t)
 
     function action(id)
         (id == 1) && return zs[1]
 
-        s = ctrl.formation[id]
+        s = form[id]
         p_ref = formpoint_to_refpoint(@SVector[s.x, s.y])
         ξi = submap(ξ, Symbol(id))
         track_refpoint(ctrl.K, ξi, p_ref, xs[id], t)

@@ -31,7 +31,7 @@ function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
     refpoints = @lift let
         x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
         leader = CarX(;x, y, θ, ψ, v)
-        @_ (ctrl.formation 
+        @_ (ctrl.formation(nothing, $t) 
             |> map(ref_point(ctrl.K, _),__) 
             |> map(to_formation_frame(ctrl, leader), __))
     end
@@ -85,7 +85,7 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
             U(v̂ = 2(1 - (t/freq-15)/5), ψ̂ = 2°)
         end
     end
-    leader_z_dy = FormationObsDynamics(FuncT(external_control, 𝕋, U))
+    leader_z_dy = FormationObsDynamics(external_control)
 
     # running at 20Hz
     delays_model  = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
@@ -103,7 +103,7 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
 
     RefK = RefPointTrackControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, kp = 1.0, ki = 0.0, kd = 0.0)
-    central = FormationControl(formation, RefK, dy_model)
+    central = FormationControl((xs, t) -> formation, RefK, dy_model)
 
     formation = rotate_formation(formation, 0°)
     init = map(1:N) do i 
