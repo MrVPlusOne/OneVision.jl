@@ -6,7 +6,9 @@ using Random
 using StaticArrays
 using Parameters
 
-include("dynamics_2D.jl")
-include("examples_2D.jl")
+include("common_2D.jl")
+include("tracking_example.jl")
+include("formation_example.jl")
+include("interactive_example.jl")
 
 end  # module Car2DExamples

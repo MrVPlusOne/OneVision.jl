@@ -1,5 +1,13 @@
 using OneVision.NumericalIntegration
 using OneVision.SymbolMaps
+using OneVision: @set, @_
+
+using AbstractPlotting
+using Makie
+using AbstractPlotting.MakieLayout
+using Printf: @sprintf
+import ColorSchemes
+import Dates
 
 @kwdef struct CarX{R} <: FieldVector{5,R}
     "x position"
@@ -257,4 +265,14 @@ function OneVision.control_all(
 )
     f = formation_controller(ctrl, ξ, xs, zs, t)
     f.(ids)
+end
+
+function car_triangle(x, y, θ; len = 0.2, width = 0.06)
+    base = Point2f0(x, y)
+    dir = Point2f0(cos(θ), sin(θ))
+    left = Point2f0(sin(θ), -cos(θ))
+    p1 = base + dir * len
+    p2 = base + left * width
+    p3 = base - left * width
+    [p1,p2,p3]
 end
