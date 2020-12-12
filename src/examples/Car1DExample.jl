@@ -120,7 +120,8 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
     N = 2
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
     init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
-    delays = DelayModel(obs = 2, act = 3, com = 4)  # DelayModel(obs=1, act=2, com=5)
+    ΔT = 3
+    delays = DelayModel(obs = 2, act = 4, com = 5, ΔT = ΔT)  # DelayModel(obs=1, act=2, com=5)
     world_model = WorldDynamics(
         fill((car_system(delta_t), WallObsModel()), N))
 
@@ -131,12 +132,13 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
     
     H = 20
     central = LeaderFollowerControl(warm_up_time = delays.act)
-    x_weights = fill(CarX(1.0, 1.0), N)
-    u_weights = fill(CarU(1.0), N)
-    result, logs = simulate(
+    x_weights = SVector{N}(fill(CarX(1.0, 1.0), N))
+    u_weights = SVector{N}(fill(CarU(1.0), N))
+    loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
+    result, (logs, loss) = simulate(
         world_dynamics, 
         delays,
-        # NaiveCF{CarX,CarZ,CarU}(N, πc, delays.com),
+        # NaiveCF(CarX{ℝ}, CarZ{ℝ}, N, central, delays.com, ΔT),
         OvCF(central, world_model, delays, x_weights, u_weights;
             X = CarX{ℝ}, Z = CarZ{ℝ}, N, H,
             # save_log = FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
@@ -145,8 +147,10 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
         ),
         init_states,
         (comps, record_f),
-        times,
+        times;
+        loss_model,
     )
+
     if log_prediction
         t0, t1 = (0.0, 11.0)
         id = 1
@@ -169,7 +173,7 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
         end
         anim |> display
     end
-    plot_result ? display(visualize(result; delta_t)) : result
+    plot_result ? display(visualize(result; delta_t, loss)) : result
 end
 
 end # Car1DExampleLabeled

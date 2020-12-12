@@ -103,11 +103,12 @@ let
     end
 end # Double integrater let
 
-@testset "Integration tests" begin
-    Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = false)
-    @test true
-    Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false)
-    @test true
-    Car2DExamples.formation_example(time_end = 3, dynamics_noise = 0.001, plot_result = false)
+int_tests = (
+    () -> Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = false),
+    () -> Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false),
+    () -> Car2DExamples.formation_example(time_end = 3, dynamics_noise = 0.001, plot_result = false),
+)
+@testset "Integration test $i" for (i, f) in enumerate(int_tests)
+    f()
     @test true
 end

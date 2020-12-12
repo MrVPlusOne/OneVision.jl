@@ -29,8 +29,8 @@ The OneVision Controller Framework.
     central::CentralControl{U,S}
     world_model::WorldDynamics
     delay_model::DelayModel
-    x_weights::Each{X}
-    u_weights::Each{U}
+    x_weights::SVector{N,X}
+    u_weights::SVector{N,U}
     optim_options::Optim.Options
     save_log::FuncT{Tuple{ℕ,𝕋,X,Z},Bool} = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
 end
@@ -84,7 +84,7 @@ function OneVision.make_controllers(
         pred_xz = (x0, z0)
         self_δxz = constant_queue((zero(x0), zero(z0)), dm.com + ΔT)
         ideal_xz = [(x, z) for (x, z, _) in init_status]
-        ideal_s = init_state(cf.central)
+        ideal_s = init_state(cf.central, t0)
 
         fp_prob = let Hf = H * ΔT + dm.total + ΔT
             ForwardPredictProblem(cf.world_model, cf.central; X, Z, Hf)
