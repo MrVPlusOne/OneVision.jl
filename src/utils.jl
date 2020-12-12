@@ -10,6 +10,7 @@ using Setfield: @set
 using QuadGK: quadgk
 using Parameters: @unpack
 using StaticArrays
+using AxisArrays
 using MacroTools: @capture
 
 "A placeholder for unimplmeneted code."

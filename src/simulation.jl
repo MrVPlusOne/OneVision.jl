@@ -30,7 +30,7 @@ end
 "A generic result visualization function that draws multiple line plots, 
 one for each component of the state vector.\n"
 function visualize(
-    result::TrajectoryData; delta_t = nothing
+    result::TrajectoryData; delta_t = nothing, loss = nothing,
 )::Scene
     if delta_t === nothing
         times = result.times
@@ -51,7 +51,22 @@ function visualize(
             lines!(ax, times, ys[:,j], linewidth=2,
                 color = get(ColorSchemes.rainbow, j / N))
         end
-        layout[c_id,1] = ax
+        layout[c_id, 1] = ax
+    end
+
+    if loss !== nothing
+        let ts = collect(AxisArrays.axes(loss)[1])
+            (delta_t !== nothing) && (ts = ts .* delta_t)
+            ys = collect(loss)
+            ax = LAxis(scene; title = "Regret Loss", xlabel)
+            N = size(ys, 2)
+            for j in 1:N
+                lines!(ax, ts, ys[:,j], linewidth=2,
+                color = get(ColorSchemes.rainbow, j / N))
+            end
+            layout[end+1, 1] = ax
+            push!(axes, ax)
+        end
     end
     linkxaxes!(axes...)
     scene
@@ -69,6 +84,8 @@ end
 """
 Simulate multiple distributed agents with delayed communication.
 
+Returns `(logs, loss_history)` or just `logs` if `loss_model` is `nothing`.
+
 # Arguments
 - `callback`: a function of the form `callback(xs,zs,us,t) -> nothing` that runs at
 every time step.
@@ -79,18 +96,28 @@ function simulate(
     framework::ControllerFramework{X,Z,U,Msg,Log},
     init_status::Each{Tuple{X,Z,U}},
     callback::Function,
-    tspan::Tuple{𝕋, 𝕋};
+    (t0, tf)::Tuple{𝕋, 𝕋};
+    loss_model::Union{RegretLossModel, Nothing} = nothing,
     xs_observer = (xs, t) -> xs,
     zs_observer = (zs, t) -> zs,
-)::Dict{ℕ,Dict{𝕋,Log}} where {X,Z,U,Msg,Log,N}
+) where {X,Z,U,Msg,Log,N}
     @assert isbitstype(Msg) "Msg = $Msg"
+    @assert tf ≥ t0
 
-    t0, tf = tspan
     ΔT = delay_model.ΔT
     is_control_time(t) = mod(t - t0, ΔT) == 0
     is_obs_time(t) = mod(t + delay_model.obs - t0, ΔT) == 0
     is_act_time(t) = mod(t - delay_model.act - t0, ΔT) == 0
     is_msg_time(t) = mod(t - delay_model.com - t0, ΔT) == 0
+
+    if loss_model !== nothing
+        # the *ideal* state and observation at the current time step
+        xs_idl, zs_idl, us_idl = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
+        @unpack central, x_weights, u_weights = loss_model
+        modeled_dynamics = loss_model.world_model
+        s_c = init_state(central, t0)
+        loss_history = AxisArray(-ones(ℝ, tf-t0+1, N), time=t0:tf, id=1:N)
+    end
 
     # the *actual* state, observation, and actuation at the current time step
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
@@ -135,17 +162,44 @@ function simulate(
         # record results
         callback(xs,zs,us,t)
 
+        # record loss
+        if loss_model !== nothing
+            if is_act_time(t)
+                us_idl .= control_all(central, s_c, xs_idl, zs_idl, t, SOneTo(N))
+            end
+            for i in 1:N
+                x_loss = sum((xs[i] .- xs_idl[i]).^2 .* x_weights[i])
+                u_loss = sum((collect(us[i]) .- us_idl[i]).^2 .* u_weights[i])
+                loss_history[time=atvalue(t), id = i] = x_loss + u_loss
+            end
+        end
+
         # update physics
-        xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
-        zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+        if loss_model === nothing
+            xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
+            zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+        else
+            xs1 = sys_forward.(world_dynamics.dynamics, xs, us, t)
+            zs1 = obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+            xs2 = sys_forward.(modeled_dynamics.dynamics, xs, us, t)
+            zs2 = obs_forward.(modeled_dynamics.obs_dynamics, xs, zs, t)
+            xs_idl .= sys_forward.(modeled_dynamics.dynamics, xs_idl, us_idl, t) .+ (xs1.-xs2)
+            zs_idl .= obs_forward.(modeled_dynamics.obs_dynamics, xs_idl, zs_idl, t) .+ (zs1-zs2)
+            xs .= xs1
+            zs .= zs1
+        end
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
-    logs
+    if loss_model === nothing
+        return logs
+    else
+        return logs, loss_history
+    end
 end
 
 """
 Simulate multiple distributed agents with the given initial states and controllers and 
-return `(trajectory data, snapshots)`.
+return `(trajectory data, (logs [, loss_history]))`.
 
 # Arguments
 - `times::Vector{𝕋}`: the time instances at which the simulation should save the states in 
@@ -162,26 +216,26 @@ function simulate(
     recorder::Tuple{Vector{String},Function},
     times::AbstractVector{𝕋};
     kwargs...
-)::Tuple{TrajectoryData,Dict{ℕ,Dict{𝕋,Log}}} where {X,Z,U,Msg,Log,N}
+) where {X,Z,U,Msg,Log,N}
     @assert !isempty(times)
 
-    result = TrajectoryData(times, N, recorder[1])
+    comps, record_f = recorder
+    result = TrajectoryData(times, N, comps)
     data_idx = 1
     tspan = times[1], times[end]
 
     function callback(xs,zs,us,t)
         if t == times[data_idx]
-            data = recorder[2](xs, zs, us)
-            @assert size(data) == (N, length(recorder[1])) ("The recorder should "
+            data = record_f(xs, zs, us)
+            @assert size(data) == (N, length(comps)) ("The recorder should "
                * "return a matrix of size (N * Num curves), got size $(size(data))")
             result.values[data_idx, :, :] = data
             data_idx += 1
         end
     end
 
-    logs = simulate(world_dynamics, delay_model, framework, init_status, 
+    sim_out = simulate(world_dynamics, delay_model, framework, init_status, 
         callback, tspan; kwargs...)
-    result, logs
-end
-
+    
+    result, sim_out
 end

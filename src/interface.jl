@@ -2,7 +2,7 @@ export ℝ, ℕ, 𝕋, Each, round_ceil, round_floor
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
 export ObsDynamics, StaticObsDynamics
 export sys_forward, limit_control, sys_A, sys_B, sys_w, obs_forward
-export DelayModel, WorldDynamics, msg_queue_length
+export DelayModel, WorldDynamics, RegretLossModel, msg_queue_length
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
@@ -150,7 +150,7 @@ function control_all(
     map(i -> control_one(π, s, xs, zs, t, i), ids)
 end
 
-function init_state(f::CentralControl{U,S})::S where {U,S}
+function init_state(f::CentralControl{U,S}, t0)::S where {U,S}
     @require_impl
 end
 
@@ -170,9 +170,9 @@ function control_one(
     control_one(f, xs, zs, t, id)
 end
 
-function init_state(::CentralControlStateless) nothing end
+function init_state(::CentralControlStateless, t0) nothing end
 
-function init_state(::CentralControl{U,SymbolMaps.SymbolMap}) where U
+function init_state(::CentralControl{U,SymbolMaps.SymbolMap}, t0) where U
     SymbolMaps.SymbolMap()
 end
 
@@ -206,6 +206,13 @@ struct WorldDynamics{N,XDynamics <: Tuple,UDynamics <: Tuple}
         os = Tuple(last.(info))
         new{length(info),typeof(ds),typeof(os)}(ds, os)
     end
+end
+
+struct RegretLossModel{N,X,U,S,XDynamics,UDynamics}
+    central::CentralControl{U,S}
+    world_model::WorldDynamics{N, XDynamics, UDynamics}
+    x_weights::SVector{N, X}
+    u_weights::SVector{N, U}
 end
 
 

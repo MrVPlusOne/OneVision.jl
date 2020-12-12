@@ -48,7 +48,7 @@ function OneVision.make_controllers(
     init_t::𝕋,
 ) where {X,Z,U,S}
     central = framework.central
-    s_c = init_state(central)
+    s_c = init_state(central, init_t)
     ctrls = ntuple(framework.num_agents) do i
         NaiveController{X,Z,U,S}(i, framework, s_c, init_t - 1)
     end
