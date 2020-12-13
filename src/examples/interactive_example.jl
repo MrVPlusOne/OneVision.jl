@@ -102,10 +102,14 @@ function live_demo()
         options = formation_names, selection = formation_names[1])
 
     formation_f() = formation_map[formation_control.selection[]]
+    function change_formation(i)
+        formation_control.i_selected[] = i
+    end
 
-    RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-        kp = 1.0, ki = 0, kd = 0)
+    # RefK = RefPointTrackControl(;
+    #     dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+    #     kp = 1.0, ki = 0, kd = 0)
+    RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
     central = FormationControl((_, _) -> formation_f(), RefK, dy_model)
 
     init = let 
@@ -128,6 +132,43 @@ function live_demo()
     traj_len = round_ceil(freq * 5)
     traj_qs = [Node(constant_queue(init[i][1], traj_len)) for i in 1:N]
     colors = [get(ColorSchemes.Spectral_10, i/N) for i in 1:N]
+    
+    function draw_refs(ctrl::FormationControl{RefPointTrackControl})
+        refpoints = @lift let
+            leader = $xs_node[1]
+            @_ (formation_f()
+                |> map(ref_point(ctrl.K, _),__) 
+                |> map(to_formation_frame(ctrl, leader), __))
+        end
+        points = @lift (x -> Point2f0(x[1])).($refpoints)
+        directions = @lift (x -> Point2f0(x[2])).($refpoints)
+        arrows!(ax_view, points, directions; 
+            linecolor=:red, arrowcolor=:red, lengthscale=0.2, arrowsize=0.1)
+        scatter!(ax_view, points; color=:red)
+    end
+
+    function draw_refs(ctrl::FormationControl{ConfigTrackControl})
+        ref_cars = @lift let
+            leader = $xs_node[1]
+            center, ω = center_of_rotation(leader, dy_model.l)
+            form = formation_f()
+            s′ = form[1]
+            rot = rotation2D(leader.θ - s′.θ)
+            offset = get_pos(leader) - get_pos(s′)
+            transform = s -> rot * s + offset
+            @_ (formation_f()
+                |> map(transform ∘ get_pos, __) 
+                |> map(rotate_around(center, ω, dy_model.l, _), __))
+        end
+        for id in 1:N
+            car = @lift let 
+                @unpack x, y, θ = $ref_cars[id]
+                car_triangle(x, y, θ)
+            end
+            poly!(ax_view, car; color = with_alpha(colors[id], 0.3))
+        end
+    end
+
     let
         # draw trajectories
         for id in 1:N
@@ -138,8 +179,8 @@ function live_demo()
                 pushpop!(q[], xs[id])
                 q[] = q[]
             end
-            @unpack r, g, b = colors[id]
-            cmap = [RGBAf0(r, g, b, 0.4), RGBAf0(r, g, b, 1)]
+            c = colors[id]
+            cmap = [with_alpha(c, 0.4), with_alpha(c, 1)]
             color = range(0, 1, length = traj_len)
             # cam = Makie.cam2d!(ax_view.scene, panbutton = Mouse.left, selectionbutton = (Keyboard.space, Mouse.right))
             lines!(ax_view, traj_x, traj_y; color, colormap = cmap, linewidth=3)
@@ -153,18 +194,7 @@ function live_demo()
             poly!(ax_view, car; color = colors[id], strokecolor=:black, strokewidth=2)
         end
         # draw ref points
-        refpoints = @lift let
-            ctrl = central
-            leader = $xs_node[1]
-            @_ (formation_f()
-                |> map(ref_point(ctrl.K, _),__) 
-                |> map(to_formation_frame(ctrl, leader), __))
-        end
-        points = @lift (x -> Point2f0(x[1])).($refpoints)
-        directions = @lift (x -> Point2f0(x[2])).($refpoints)
-        arrows!(ax_view, points, directions; 
-            linecolor=:red, arrowcolor=:red, lengthscale=0.2, arrowsize=0.1)
-        scatter!(ax_view, points; color=:red)
+        draw_refs(central)
     end
 
     
@@ -176,6 +206,9 @@ function live_demo()
             ispressed(button, Keyboard.right) && change_turn(-1)
             ispressed(button, Keyboard.up) && change_speed(1)
             ispressed(button, Keyboard.down) && change_speed(-1)
+            ispressed(button, Keyboard._1) && change_formation(1)
+            ispressed(button, Keyboard._2) && change_formation(2)
+            ispressed(button, Keyboard._3) && change_formation(3)
         end
         current_time = Dates.now()
         time = Dates.canonicalize(current_time - start_time)

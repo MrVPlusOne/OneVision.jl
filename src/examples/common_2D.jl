@@ -11,6 +11,8 @@
     ψ::R = 0.0
 end
 
+get_pos(s::CarX) = @SVector[s.x, s.y]
+
 @kwdef struct CarU{R} <: FieldVector{2,R}
     "desired linear speed" 
     v̂::R = 0.0
@@ -37,7 +39,7 @@ end
     integrator_samples::ℕ = 1
 end
 
-ψ_from_v_ω(v, ω, l) = abs(v) < 0.1 ? atan(ω * l, v) :  atan(ω * l / v)
+ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l, v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
@@ -47,7 +49,7 @@ function u_from_v_ω(v, ω, dy::CarDynamics)
     CarU(v, ψ)
 end
 
-
+# Simple clamping limit
 function OneVision.limit_control(dy::CarDynamics, u::U, x, t)::U where {U}
     v̂, ψ̂ = u
     v̂1 = clamp(v̂, -dy.max_v, dy.max_v)
@@ -143,6 +145,7 @@ function track_refpoint(
     θ = s.θ
     v, v_y = rotation2D(-θ) * v_p
     ω = v_y / d
+    (v < 0) && (ω *= -1)
     u_from_v_ω(v, ω, K.dy)
 end
 
@@ -207,14 +210,15 @@ end
 """
 Leader-follower formation control
 """
-struct FormationControl{F} <: CentralControl{CarU{ℝ}, SymbolMap}
+struct FormationControl{TC <: TrackingControl, F} <: CentralControl{CarU{ℝ}, SymbolMap}
     "formation(xs, t)::Formation{ℝ}"
     formation::F
-    K::RefPointTrackControl
+    "TrackingControl"
+    K::TC 
     dy::CarDynamics
 end
 
-function to_formation_frame(ctrl::FormationControl, s_leader)
+function to_formation_frame(ctrl::FormationControl{RefPointTrackControl}, s_leader)
     K = ctrl.K
     rot = rotation2D(s_leader.θ)
     pos_offset = ref_point(K, s_leader)
@@ -231,7 +235,7 @@ function to_formation_frame(ctrl::FormationControl, s_leader)
     formpoint_to_refpoint
 end
 
-function formation_controller(ctrl, ξ, xs, zs, t)
+function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, xs, zs, t)
     formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
     form = ctrl.formation(xs, t)
 
@@ -242,6 +246,53 @@ function formation_controller(ctrl, ξ, xs, zs, t)
         p_ref = formpoint_to_refpoint(@SVector[s.x, s.y])
         ξi = submap(ξ, Symbol(id))
         track_refpoint(ctrl.K, ξi, p_ref, xs[id], t)
+    end
+
+    action
+end
+
+"""
+Compute the `CarX` that rotates around the given `center` at the specified angular 
+velocity `ω` 
+"""
+function rotate_around(center, ω, l, pos)
+    x, y = pos
+    dir = pos - center
+    θ = atan(dir[2], dir[1]) + sign(ω) * 90°
+    r = norm(dir)
+    v = r * abs(ω)
+    ψ = ψ_from_v_ω(v, ω, l)
+    CarX(x, y, θ, v, ψ)
+end
+
+function center_of_rotation(s::CarX, l)
+    ω = ω_from_v_ψ(s.v, s.ψ, l)
+    r = ω ≈ 0 ? sign(ω) * 1e10 : s.v / ω
+    θ = s.θ
+    center = get_pos(s) + @SVector[-sin(θ), cos(θ)] * r
+    center, ω
+end
+
+
+function formation_controller(ctrl::FormationControl{ConfigTrackControl}, ξ, xs, zs, t)
+    s_leader = xs[1]
+    @unpack l = ctrl.dy
+    θ = s_leader.θ
+    center, ω = center_of_rotation(s_leader, l)
+
+    form = ctrl.formation(xs, t)
+    s′ = form[1]
+    rot = rotation2D(s_leader.θ - s′.θ)
+    offset = get_pos(s_leader) - get_pos(s′)
+
+    function action(id)
+        (id == 1) && return zs[1]
+
+        s = form[id]
+        pos = rot * get_pos(s) + offset
+        ŝ = rotate_around(center, ω, l, pos)
+        ξi = submap(ξ, Symbol(id))
+        track_ref(ctrl.K, ξi, ŝ, xs[id], t)
     end
 
     action
@@ -266,4 +317,9 @@ function car_triangle(x, y, θ; len = 0.2, width = 0.06)
     p2 = base + left * width
     p3 = base - left * width
     [p1,p2,p3]
+end
+
+function with_alpha(color, alpha)
+    @unpack r, g, b = color
+    RGBAf0(r, g, b, alpha)
 end
