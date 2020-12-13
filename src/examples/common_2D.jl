@@ -39,7 +39,7 @@ end
     integrator_samples::ℕ = 1
 end
 
-ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l, v)
+ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l / v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
