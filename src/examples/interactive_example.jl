@@ -70,14 +70,14 @@ function live_demo()
     leader_z_dy = FormationObsDynamics(external_control)
 
     # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 15, com = 5, ΔT = 5)
+    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
     delays_actual = delays_model
     H = 20
     ΔT = delays_model.ΔT
 
     N = 4
     triangle_formation = let
-        l = 0.5
+        l = 0.8
         Δϕ = 360° / (N-1) 
         circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
         [[zero(X)]; circle]
@@ -89,7 +89,7 @@ function live_demo()
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
     end
     vertical_formation = let
-        l = 0.5
+        l = 0.6
         leader_idx = round_ceil(N/2)
         line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
@@ -106,11 +106,12 @@ function live_demo()
         formation_control.i_selected[] = i
     end
 
-    # RefK = RefPointTrackControl(;
-    #     dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-    #     kp = 1.0, ki = 0, kd = 0)
-    RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
-    central = FormationControl((_, _) -> formation_f(), RefK, dy_model)
+    RefK = RefPointTrackControl(;
+        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+        kp = 1.0, ki = 0, kd = 0)
+    # RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
+    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
+    central = FormationControl((_, _) -> formation_f(), RefK, dy_model, avoidance)
 
     init = let 
         formation = rotate_formation(formation_f(), 0°)

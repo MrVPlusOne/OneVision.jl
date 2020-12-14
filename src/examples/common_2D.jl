@@ -207,6 +207,15 @@ function rotate_formation(form::Formation{R}, α)::Formation{R} where R
     f.(form)
 end
 
+@kwdef struct CollisionAvoidance
+    "Force scale"
+    scale::ℝ
+    "Force goes to infinity below this distance"
+    min_r::ℝ
+    "Force drops to zero beyound this distance"
+    max_r::ℝ
+end
+
 """
 Leader-follower formation control
 """
@@ -216,6 +225,19 @@ struct FormationControl{TC <: TrackingControl, F} <: CentralControl{CarU{ℝ}, S
     "TrackingControl"
     K::TC 
     dy::CarDynamics
+    avoidance::CollisionAvoidance
+end
+
+const repl_rotation = rotation2D(10°)
+function repel_force(avoidance::CollisionAvoidance, center, pos)
+    @unpack scale, min_r, max_r = avoidance
+    r = pos - center
+    d = norm(r)
+    (d > max_r) && return zero(center)
+
+    α = max(eps(), (d - min_r) / (max_r - min_r))
+    mag = scale * (1/α)
+    repl_rotation * (r / d) * mag
 end
 
 function to_formation_frame(ctrl::FormationControl{RefPointTrackControl}, s_leader)
@@ -239,13 +261,21 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
     formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
     form = ctrl.formation(xs, t)
 
+    N = length(xs)
+    function avoid_collision(i)
+        ca = ctrl.avoidance
+        pos = get_pos(xs[i]) # ref_point(ctrl.K, xs[i])
+        sum(repel_force(ca, get_pos(xs[j]), pos) for j in 1:N if j != i)
+    end
+
     function action(id)
         (id == 1) && return zs[1]
 
         s = form[id]
-        p_ref = formpoint_to_refpoint(@SVector[s.x, s.y])
+        (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y])
         ξi = submap(ξ, Symbol(id))
-        track_refpoint(ctrl.K, ξi, p_ref, xs[id], t)
+        v_o = avoid_collision(id)
+        track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
     end
 
     action
