@@ -7,7 +7,7 @@ end
 
 function live_demo()
     X, U = CarX{ℝ}, CarU{ℝ}
-    Z = U
+    Z = HVec{U, ℕ}
     freq = 100.0
     delta_t = 1 / freq
     
@@ -53,7 +53,7 @@ function live_demo()
     max_ψ = rad2deg(max_ψ)
     slider_ticks = 500
     ext_v = mk_silder!(
-        "v̂", quadratic_range(max_v, slider_ticks), controls_layout, "m/s")
+        "v̂", range(-max_v, max_v, length = slider_ticks), controls_layout, "m/s")
     ext_ψ = mk_silder!(
         "ψ̂", quadratic_range(max_ψ, slider_ticks, reverse = true), controls_layout, "°")
 
@@ -67,13 +67,6 @@ function live_demo()
     function external_control(x, t)
         CarU{ℝ}(ext_v.value[], deg2rad(ext_ψ.value[]))
     end
-    leader_z_dy = FormationObsDynamics(external_control)
-
-    # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
-    delays_actual = delays_model
-    H = 20
-    ΔT = delays_model.ΔT
 
     N = 4
     triangle_formation = let
@@ -97,27 +90,43 @@ function live_demo()
     formation_names = ["triangle", "horizontal", "vertical"]
     formation_map = Dict{String, Formation{ℝ}}(zip(formation_names, 
         [triangle_formation, horizontal_formation, vertical_formation]))
+    form_from_id(i) = formation_map[formation_names[i]]
+    init_formation = 1
     formation_control = controls_layout[0, 1] = LMenu(
         scene, direction = :up, 
-        options = formation_names, selection = formation_names[1])
+        options = formation_names, selection = formation_names[init_formation])
 
-    formation_f() = formation_map[formation_control.selection[]]
     function change_formation(i)
         formation_control.i_selected[] = i
     end
+    function external_formation(x, t)
+        formation_control.i_selected[]
+    end
+    function formation_f(zs) 
+        form_id = zs[1].d
+        form_from_id(form_id)
+    end
+
+    leader_z_dy = FormationObsDynamics(external_control, external_formation)
+
+    # running at 20Hz
+    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
+    delays_actual = delays_model
+    H = 20
+    ΔT = delays_model.ΔT
 
     RefK = RefPointTrackControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
         kp = 1.0, ki = 0, kd = 0)
     # RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
-    central = FormationControl((_, _) -> formation_f(), RefK, dy_model, avoidance)
+    central = FormationControl((_, zs, _) -> formation_f(zs), RefK, dy_model, avoidance)
 
     init = let 
-        formation = rotate_formation(formation_f(), 0°)
+        formation = rotate_formation(form_from_id(init_formation), 0°)
         map(1:N) do i 
             x = formation[i]
-            x, zero(Z), zero(U)
+            x, HVec(zero(U), init_formation), zero(U)
         end
     end
 
@@ -137,7 +146,7 @@ function live_demo()
     function draw_refs(ctrl::FormationControl{RefPointTrackControl})
         refpoints = @lift let
             leader = $xs_node[1]
-            @_ (formation_f()
+            @_ (form_from_id(formation_control.i_selected[])
                 |> map(ref_point(ctrl.K, _),__) 
                 |> map(to_formation_frame(ctrl, leader), __))
         end
@@ -152,12 +161,12 @@ function live_demo()
         ref_cars = @lift let
             leader = $xs_node[1]
             center, ω = center_of_rotation(leader, dy_model.l)
-            form = formation_f()
+            form = form_from_id(formation_control.i_selected[])
             s′ = form[1]
             rot = rotation2D(leader.θ - s′.θ)
             offset = get_pos(leader) - get_pos(s′)
             transform = s -> rot * s + offset
-            @_ (formation_f()
+            @_ (form
                 |> map(transform ∘ get_pos, __) 
                 |> map(rotate_around(center, ω, dy_model.l, _), __))
         end

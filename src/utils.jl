@@ -1,6 +1,7 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D, to_matrix
+export HVec
 export @kwdef, @_, @set
 
 import DataStructures
@@ -260,3 +261,26 @@ rotation2D(α) =
 
 to_matrix(xs::AbstractVector{X}) where X = 
     [x[i] for x in xs, i in 1:length(X)]
+
+
+    """
+Hybrid Vector with both continuous and discrete parts.
+Both `C` and `D` should support these operations: `zero`, `:+`, `:-`.
+"""
+struct HVec{C, D}
+    c::C
+    d::D
+end
+
+function Base.zero(::Type{HVec{C,D}}) where {C,D}
+    HVec(zero(C), zero(D))
+end
+function Base.zero(::HVec{C,D}) where {C,D}
+    zero(HVec{C,D})
+end
+function Base.:-(v1::HVec{C,D}, v2::HVec{C,D}) where {C,D}
+    HVec(v1.c - v2.c, v1.d - v2.d)
+end
+function Base.:+(v1::HVec{C,D}, v2::HVec{C,D}) where {C,D}
+    HVec(v1.c + v2.c, v1.d + v2.d)
+end

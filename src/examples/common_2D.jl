@@ -259,7 +259,7 @@ end
 
 function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, xs, zs, t)
     formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
-    form = ctrl.formation(xs, t)
+    form = ctrl.formation(xs, zs, t)
 
     N = length(xs)
     function avoid_collision(i)
@@ -268,8 +268,8 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
         sum(repel_force(ca, get_pos(xs[j]), pos) for j in 1:N if j != i)
     end
 
-    function action(id)
-        (id == 1) && return zs[1]
+    function action(id)::CarU
+        (id == 1) && return zs[1].c
 
         s = form[id]
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y])
@@ -310,7 +310,7 @@ function formation_controller(ctrl::FormationControl{ConfigTrackControl}, ξ, xs
     θ = s_leader.θ
     center, ω = center_of_rotation(s_leader, l)
 
-    form = ctrl.formation(xs, t)
+    form = ctrl.formation(xs, zs, t)
     s′ = form[1]
     rot = rotation2D(s_leader.θ - s′.θ)
     offset = get_pos(s_leader) - get_pos(s′)

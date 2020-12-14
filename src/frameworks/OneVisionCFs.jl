@@ -82,7 +82,7 @@ function OneVision.make_controllers(
         u_history = constant_queue(u0, dm.obs + dm.act)
         x_dy = cf.world_model.dynamics[id]
         pred_xz = (x0, z0)
-        self_δxz = constant_queue((zero(x0), zero(z0)), dm.com + ΔT)
+        self_δxz = constant_queue((zero(X), zero(Z)), dm.com + ΔT)
         ideal_xz = [(x, z) for (x, z, _) in init_status]
         ideal_s = init_state(cf.central, t0)
 

@@ -31,7 +31,7 @@ function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
     refpoints = @lift let
         x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
         leader = CarX(;x, y, θ, ψ, v)
-        @_ (ctrl.formation(nothing, $t) 
+        @_ (ctrl.formation(nothing, nothing, $t) 
             |> map(ref_point(ctrl.K, _),__) 
             |> map(to_formation_frame(ctrl, leader), __))
     end
@@ -44,19 +44,22 @@ function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
     scene
 end
 
-struct FormationObsDynamics{F} <: ObsDynamics 
-    "external_u(x, t) -> u"
-    external_u::F
+struct FormationObsDynamics{Fu,Ff} <: ObsDynamics 
+    "`external_u(x, t) -> u`"
+    external_u::Fu
+    "`external_formation(x, t) -> formation_idx`"
+    external_formation::Ff
 end
 
 function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
-    dy.external_u(x, t)
+    HVec(dy.external_u(x, t), dy.external_formation(x, t))
 end
+
 
 function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
         dynamics_noise = 0.005, sensor_noise = dynamics_noise)
     X, U = CarX{ℝ}, CarU{ℝ}
-    Z = U
+    Z = HVec{U, ℕ}
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
@@ -85,7 +88,12 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
             U(v̂ = 2(1 - (t/freq-15)/5), ψ̂ = 2°)
         end
     end
-    leader_z_dy = FormationObsDynamics(external_control)
+
+    function external_formation(_, t)
+        1
+    end
+
+    leader_z_dy = FormationObsDynamics(external_control, external_formation)
 
     # running at 20Hz
     delays_model  = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
@@ -95,7 +103,7 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
 
     N = 4
     formation = begin
-        l = 0.5
+        l = 0.8
         Δϕ = 360° / (N-1) 
         circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
         [[zero(X)]; circle]
@@ -103,7 +111,8 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
 
     RefK = RefPointTrackControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, kp = 1.0, ki = 0.0, kd = 0.0)
-    central = FormationControl((xs, t) -> formation, RefK, dy_model)
+    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
+    central = FormationControl((xs, zs, t) -> formation, RefK, dy_model, avoidance)
 
     formation = rotate_formation(formation, 0°)
     init = map(1:N) do i 
