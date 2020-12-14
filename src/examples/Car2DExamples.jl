@@ -7,6 +7,7 @@ using OneVision.SymbolMaps
 
 using Random
 using StaticArrays
+using AxisArrays
 using Parameters
 using AbstractPlotting
 using Makie

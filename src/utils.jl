@@ -38,7 +38,7 @@ end
 end
 
 function constant_queue(value::T, q_size)::FixedQueue{T} where {T}
-    FixedQueue(fill(value, q_size))
+        FixedQueue(fill(value, q_size))
 end
 
 "Convert a 2-D column vector to a 1-D vector.\n"

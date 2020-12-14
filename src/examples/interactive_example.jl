@@ -6,7 +6,7 @@ quadratic_range(ub,n; reverse=false) = let f(x) = sign(x) * x^2 * ub
 end
 
 function build_ui(max_v, max_ψ, formation_names)
-    scene, layout = layoutscene(resolution = (1800, 1600))
+    scene, layout = layoutscene(resolution = (2000, 1600))
     
     function mk_silder!(name, range, parent_layout, unit = "")
         ls = labelslider!(scene, name, range, format = x -> @sprintf("%.3g%s", x, unit))
@@ -17,9 +17,10 @@ function build_ui(max_v, max_ψ, formation_names)
     ax_view = layout[1,1] = LAxis(
         scene, title = "Scene", aspect = DataAspect(), 
         backgroundcolor = RGBf0(0.98, 0.98, 0.98))
-    params_layout = layout[1,2] = GridLayout()
+    display_layout = layout[1,2] = GridLayout()
     controls_layout = layout[2,1] = GridLayout()
-    colsize!(layout, 1, Relative(3/4))
+    params_layout = layout[2,2] = GridLayout()
+    colsize!(layout, 1, Relative(2/3))
     rowsize!(layout, 1, Relative(4/5))
 
     dy_noise_control = mk_silder!(
@@ -62,6 +63,7 @@ function build_ui(max_v, max_ψ, formation_names)
     (
         scene = scene,
         ax_view = ax_view,
+        display_layout = display_layout,
         dy_noise = dy_noise_control, 
         sensor_noise = sensor_noise_control,
         v_slider = v_slider,
@@ -72,13 +74,43 @@ function build_ui(max_v, max_ψ, formation_names)
 end
 
 function draw_view(ui, freq, init, central, dy_model, form_from_id)
-    @unpack ax_view, formation_control = ui
+    @unpack ax_view, display_layout, formation_control, scene = ui
 
     N = length(init)
     xs_node = Node((p -> p[1]).(init))
     traj_len = round_ceil(freq * 5)
     traj_qs = [Node(constant_queue(init[i][1], traj_len)) for i in 1:N]
     colors = [get(ColorSchemes.Spectral_10, i/N) for i in 1:N]
+
+    loss_node = Node(AxisArray(zeros(ℝ, N, 2), id=1:N, comp=[:u, :x]))
+    loss_len = traj_len
+    loss_q = constant_queue(loss_node[], loss_len)
+    u_loss = [Node(zeros(ℝ, loss_len)) for _ in 1:N]
+    x_loss = [Node(zeros(ℝ, loss_len)) for _ in 1:N]
+    total_loss = Node(zeros(ℝ, loss_len))
+
+    # draw loss history
+    on(loss_node) do loss
+        pushpop!(loss_q, copy(loss))
+        for i in 1:N
+            u_loss[i][] = [l[comp=:u, id = i] for l in loss_q]
+            x_loss[i][] = [l[comp=:x, id = i] for l in loss_q]
+        end
+        total_loss[] = map(sum, loss_q)
+    end
+
+    function loss_ax(title)
+        display_layout[end+1,1] = LAxis(scene, title = title, 
+            xzoomlock = true, xpanlock = true, yrectzoom = true)
+    end
+    total_ax, x_ax, u_ax = loss_ax.(["Total Loss", "X Loss", "U Loss"])
+    trim!(display_layout)
+    
+    for i in 1:N
+        lines!(x_ax, 1:loss_len, x_loss[i]; color=colors[i])
+        lines!(u_ax, 1:loss_len, u_loss[i]; color=colors[i])
+    end
+    lines!(total_ax, 1:loss_len, total_loss; color=:red)
     
     function draw_refs(ctrl::FormationControl{RefPointTrackControl})
         refpoints = @lift let
@@ -116,36 +148,34 @@ function draw_view(ui, freq, init, central, dy_model, form_from_id)
         end
     end
 
-    let
-        # draw trajectories
-        for id in 1:N
-            q = traj_qs[id]
-            traj_x = @lift [x.x for x in $q]
-            traj_y = @lift [x.y for x in $q]
-            on(xs_node) do xs
-                pushpop!(q[], xs[id])
-                q[] = q[]
-            end
-            c = colors[id]
-            cmap = [with_alpha(c, 0.4), with_alpha(c, 1)]
-            color = range(0, 1, length = traj_len)
-            # cam = Makie.cam2d!(ax_view.scene, panbutton = Mouse.left, selectionbutton = (Keyboard.space, Mouse.right))
-            lines!(ax_view, traj_x, traj_y; color, colormap = cmap, linewidth=3)
+    # draw trajectories
+    for id in 1:N
+        q = traj_qs[id]
+        traj_x = @lift [x.x for x in $q]
+        traj_y = @lift [x.y for x in $q]
+        on(xs_node) do xs
+            pushpop!(q[], xs[id])
+            q[] = q[]
         end
-        # draw cars
-        for id in 1:N
-            car = @lift let 
-                @unpack x, y, θ = $xs_node[id]
-                car_triangle(x, y, θ)
-            end
-            poly!(ax_view, car; color = colors[id], strokecolor=:black, strokewidth=2)
-        end
-        # draw ref points
-        draw_refs(central)
+        c = colors[id]
+        cmap = [with_alpha(c, 0.4), with_alpha(c, 1)]
+        color = range(0, 1, length = traj_len)
+        # cam = Makie.cam2d!(ax_view.scene, panbutton = Mouse.left, selectionbutton = (Keyboard.space, Mouse.right))
+        lines!(ax_view, traj_x, traj_y; color, colormap = cmap, linewidth=3)
     end
+    # draw cars
+    for id in 1:N
+        car = @lift let 
+            @unpack x, y, θ = $xs_node[id]
+            car_triangle(x, y, θ)
+        end
+        poly!(ax_view, car; color = colors[id], strokecolor=:black, strokewidth=2)
+    end
+    # draw ref points
+    draw_refs(central)
 
     display(ui.scene)
-    xs_node
+    xs_node, loss_node
 end
 
 function live_demo()
@@ -204,7 +234,8 @@ function live_demo()
     leader_z_dy = FormationObsDynamics(external_control, external_formation)
 
     # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
+    # delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
+    delays_model  = DelayModel(obs = 1, act = 1, com = 1, ΔT = 5)
     delays_actual = delays_model
     H = 20
     ΔT = delays_model.ΔT
@@ -229,16 +260,17 @@ function live_demo()
     x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
     u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
-    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-    framework = OvCF(loss_model, delays_model; Z, H)
+    framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
+    # framework = OvCF(loss_model, delays_model; Z, H)
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
 
-    xs_node = draw_view(ui, freq, init, central, dy_model, form_from_id)
+    xs_node, loss_node = draw_view(ui, freq, init, central, dy_model, form_from_id)
     start_time = Dates.now()
     last_time = Dates.now()
     function callback(xs,zs,us,loss,t)
         xs_node[] = xs
+        loss_node[] = loss
         ui.handle_keyboard()
 
         current_time = Dates.now()
