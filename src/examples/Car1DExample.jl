@@ -139,8 +139,8 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
         world_dynamics, 
         delays,
         # NaiveCF(CarX{ℝ}, CarZ{ℝ}, N, central, delays.com, ΔT),
-        OvCF(central, world_model, delays, x_weights, u_weights;
-            X = CarX{ℝ}, Z = CarZ{ℝ}, N, H,
+        OvCF(loss_model, delays;
+            Z = CarZ{ℝ}, H,
             # save_log = FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
             #     log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
             # end

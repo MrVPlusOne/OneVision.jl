@@ -5,24 +5,19 @@ quadratic_range(ub,n; reverse=false) = let f(x) = sign(x) * x^2 * ub
     f.(range(l, r; length=n))
 end
 
-function live_demo()
-    X, U = CarX{ℝ}, CarU{ℝ}
-    Z = HVec{U, ℕ}
-    freq = 100.0
-    delta_t = 1 / freq
-    
+function build_ui(max_v, max_ψ, formation_names)
     scene, layout = layoutscene(resolution = (1800, 1600))
-
+    
     function mk_silder!(name, range, parent_layout, unit = "")
         ls = labelslider!(scene, name, range, format = x -> @sprintf("%.3g%s", x, unit))
         parent_layout[end+1,1] = ls.layout
         ls.slider
     end
 
-    params_layout = layout[1,2] = GridLayout()
     ax_view = layout[1,1] = LAxis(
         scene, title = "Scene", aspect = DataAspect(), 
         backgroundcolor = RGBf0(0.98, 0.98, 0.98))
+    params_layout = layout[1,2] = GridLayout()
     controls_layout = layout[2,1] = GridLayout()
     colsize!(layout, 1, Relative(3/4))
     rowsize!(layout, 1, Relative(4/5))
@@ -31,113 +26,55 @@ function live_demo()
         "dynamics noise", log_range(1e-5, 1e-1, 100), params_layout)
     sensor_noise_control = mk_silder!(
         "sensor noise", log_range(1e-5, 1e-1, 100), params_layout)
-
-    params = (
-        dy_noise = dy_noise_control.value, 
-        sensor_noise = sensor_noise_control.value)
-
-    # Car dynamics parameters
-    dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
-    rng = MersenneTwister(1234)
-    function add_noise(x::X, t)::X where X
-        x + params.dy_noise[] * CarX(
-            x=0.0, y=0.0, θ=0.0, v = randn(rng, ℝ), ψ = randn(rng, ℝ))
-    end
-    dy_actual = @set dy_model.add_noise = add_noise
     
-    function xs_observer(xs, t)
-        (x -> x + randn(rng, X) * params.sensor_noise[]).(xs)
-    end
-
-    @unpack max_v, max_ψ = dy_actual
     max_ψ = rad2deg(max_ψ)
     slider_ticks = 500
-    ext_v = mk_silder!(
+    v_slider = mk_silder!(
         "v̂", range(-max_v, max_v, length = slider_ticks), controls_layout, "m/s")
-    ext_ψ = mk_silder!(
+    ψ_slider = mk_silder!(
         "ψ̂", quadratic_range(max_ψ, slider_ticks, reverse = true), controls_layout, "°")
-
-    function change_turn(delta) 
-        set_close_to!(ext_ψ, ext_ψ.value[] + 4delta * max_ψ / slider_ticks)
-    end
-    function change_speed(delta) 
-        set_close_to!(ext_v, ext_v.value[] + 4delta * max_v / slider_ticks)
-    end
-
-    function external_control(x, t)
-        CarU{ℝ}(ext_v.value[], deg2rad(ext_ψ.value[]))
-    end
-
-    N = 4
-    triangle_formation = let
-        l = 0.8
-        Δϕ = 360° / (N-1) 
-        circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
-        [[zero(X)]; circle]
-    end
-    horizontal_formation = let
-        l = 0.5
-        leader_idx = round_ceil(N/2)
-        line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
-        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
-    end
-    vertical_formation = let
-        l = 0.6
-        leader_idx = round_ceil(N/2)
-        line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
-        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
-    end
-    formation_names = ["triangle", "horizontal", "vertical"]
-    formation_map = Dict{String, Formation{ℝ}}(zip(formation_names, 
-        [triangle_formation, horizontal_formation, vertical_formation]))
-    form_from_id(i) = formation_map[formation_names[i]]
-    init_formation = 1
     formation_control = controls_layout[0, 1] = LMenu(
         scene, direction = :up, 
-        options = formation_names, selection = formation_names[init_formation])
+        options = formation_names, selection = formation_names[1])
 
-    function change_formation(i)
-        formation_control.i_selected[] = i
-    end
-    function external_formation(x, t)
-        formation_control.i_selected[]
-    end
-    function formation_f(zs) 
-        form_id = zs[1].d
-        form_from_id(form_id)
-    end
+    function handle_keyboard()
+        function change_turn(delta) 
+            set_close_to!(ψ_slider, ψ_slider.value[] + 4delta * max_ψ / slider_ticks)
+        end
+        function change_speed(delta) 
+            set_close_to!(v_slider, v_slider.value[] + 4delta * max_v / slider_ticks)
+        end
+        function change_formation(i)
+            formation_control.i_selected[] = i
+        end
 
-    leader_z_dy = FormationObsDynamics(external_control, external_formation)
-
-    # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
-    delays_actual = delays_model
-    H = 20
-    ΔT = delays_model.ΔT
-
-    RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-        kp = 1.0, ki = 0, kd = 0)
-    # RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
-    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
-    central = FormationControl((_, zs, _) -> formation_f(zs), RefK, dy_model, avoidance)
-
-    init = let 
-        formation = rotate_formation(form_from_id(init_formation), 0°)
-        map(1:N) do i 
-            x = formation[i]
-            x, HVec(zero(U), init_formation), zero(U)
+        let button = scene.events.keyboardbuttons[]
+            ispressed(button, Keyboard.left) && change_turn(1)
+            ispressed(button, Keyboard.right) && change_turn(-1)
+            ispressed(button, Keyboard.up) && change_speed(1)
+            ispressed(button, Keyboard.down) && change_speed(-1)
+            ispressed(button, Keyboard._1) && change_formation(1)
+            ispressed(button, Keyboard._2) && change_formation(2)
+            ispressed(button, Keyboard._3) && change_formation(3)
         end
     end
 
-    world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
-    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-    framework = let 
-        x_weights = fill(X(x = 1, y = 1, θ = 1), N)
-        u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delays_model, x_weights, u_weights; X, Z, N, H)
-    end
+    (
+        scene = scene,
+        ax_view = ax_view,
+        dy_noise = dy_noise_control, 
+        sensor_noise = sensor_noise_control,
+        v_slider = v_slider,
+        ψ_slider = ψ_slider,
+        formation_control = formation_control,
+        handle_keyboard = handle_keyboard,
+    )
+end
 
+function draw_view(ui, freq, init, central, dy_model, form_from_id)
+    @unpack ax_view, formation_control = ui
+
+    N = length(init)
     xs_node = Node((p -> p[1]).(init))
     traj_len = round_ceil(freq * 5)
     traj_qs = [Node(constant_queue(init[i][1], traj_len)) for i in 1:N]
@@ -207,19 +144,103 @@ function live_demo()
         draw_refs(central)
     end
 
-    
-    function callback(xs,zs,us,t)
-        xs_node[] = xs
+    display(ui.scene)
+    xs_node
+end
 
-        let button = scene.events.keyboardbuttons[]
-            ispressed(button, Keyboard.left) && change_turn(1)
-            ispressed(button, Keyboard.right) && change_turn(-1)
-            ispressed(button, Keyboard.up) && change_speed(1)
-            ispressed(button, Keyboard.down) && change_speed(-1)
-            ispressed(button, Keyboard._1) && change_formation(1)
-            ispressed(button, Keyboard._2) && change_formation(2)
-            ispressed(button, Keyboard._3) && change_formation(3)
+function live_demo()
+    X, U = CarX{ℝ}, CarU{ℝ}
+    Z = HVec{U, ℕ}
+    freq = 100.0
+    delta_t = 1 / freq
+
+    max_v = 5.0
+    max_ψ = 45°
+    formation_names = ["triangle", "horizontal", "vertical"]
+    ui = build_ui(max_v, max_ψ, formation_names)
+
+    # Car dynamics parameters
+    dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
+    rng = MersenneTwister(1234)
+    function add_noise(x::X, t)::X where X
+        x + ui.dy_noise.value[] * CarX(
+            x=0.0, y=0.0, θ=0.0, v = randn(rng, ℝ), ψ = randn(rng, ℝ))
+    end
+    dy_actual = @set dy_model.add_noise = add_noise
+    
+    function xs_observer(xs, t)
+        (x -> x + randn(rng, X) * ui.sensor_noise.value[]).(xs)
+    end
+
+    N = 4
+    triangle_formation = let
+        l = 0.8
+        Δϕ = 360° / (N-1) 
+        circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
+        [[zero(X)]; circle]
+    end
+    horizontal_formation = let
+        l = 0.5
+        leader_idx = round_ceil(N/2)
+        line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+    vertical_formation = let
+        l = 0.6
+        leader_idx = round_ceil(N/2)
+        line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+    formation_map = Dict{String, Formation{ℝ}}(zip(formation_names, 
+        [triangle_formation, horizontal_formation, vertical_formation]))
+    form_from_id(i) = formation_map[formation_names[i]]
+
+    function external_control(x, t)
+        CarU{ℝ}(ui.v_slider.value[], deg2rad(ui.ψ_slider.value[]))
+    end
+    function external_formation(x, t)
+        ui.formation_control.i_selected[]
+    end
+    leader_z_dy = FormationObsDynamics(external_control, external_formation)
+
+    # running at 20Hz
+    delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
+    delays_actual = delays_model
+    H = 20
+    ΔT = delays_model.ΔT
+
+    RefK = RefPointTrackControl(;
+        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+        kp = 1.0, ki = 0, kd = 0)
+    # RefK = ConfigTrackControl(;dy = dy_model, k1 = 2.0, k2 = 0.5, k3 = 1.0)
+    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
+    central = FormationControl((_, zs, _) -> form_from_id(zs[1].d), 
+        RefK, dy_model, avoidance)
+
+    init = let 
+        formation = rotate_formation(form_from_id(1), 0°)
+        map(1:N) do i 
+            x = formation[i]
+            x, HVec(zero(U), 1), zero(U)
         end
+    end
+
+    world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
+    x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
+    u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
+    loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
+    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
+    framework = OvCF(loss_model, delays_model; Z, H)
+    world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
+            |> WorldDynamics)
+
+    xs_node = draw_view(ui, freq, init, central, dy_model, form_from_id)
+    start_time = Dates.now()
+    last_time = Dates.now()
+    function callback(xs,zs,us,loss,t)
+        xs_node[] = xs
+        ui.handle_keyboard()
+
         current_time = Dates.now()
         time = Dates.canonicalize(current_time - start_time)
         print("Interactive Simulation running ($time)...  \r"); flush(stdout)
@@ -228,12 +249,7 @@ function live_demo()
         sleep(max(0, to_sleep))
         last_time = current_time
     end
-
-    world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
-            |> WorldDynamics)
-    scene |> display
-    start_time = Dates.now()
-    last_time = Dates.now()
     simulate(
-        world, delays_actual, framework, init, callback, (1, typemax(𝕋)); xs_observer)
+        world, delays_actual, framework, init, callback, (1, typemax(𝕋)); 
+        loss_model, xs_observer)
 end

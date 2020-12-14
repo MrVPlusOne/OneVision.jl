@@ -46,6 +46,17 @@ function OvCF(central::CentralControl{U,S}, world_model, delay_model, x_weights,
             iterations = max_iters))
 end
 
+function OvCF(loss_model::RegretLossModel{N,X,U,S}, delay_model; 
+    Z, H, 
+    optim_options = Optim.Options(
+        x_abstol=1e-4, f_abstol=1e-6, f_reltol=1e-6, iterations=100),
+    save_log = FuncT(x -> false, Tuple{ℕ,𝕋,X,Z}, Bool)
+) where {N,X,U,S}
+    @unpack central, world_model, x_weights, u_weights = loss_model
+    OvCF{N,X,Z,U,S,H}(;central, world_model, delay_model, 
+        x_weights, u_weights, save_log, optim_options)
+end
+
 
 @kwdef mutable struct OvController{N,X,Z,U,S,H,ΔT,Hf,WDy,Ctrl} <: Controller{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
     id::ℕ

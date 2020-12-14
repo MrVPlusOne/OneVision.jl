@@ -89,7 +89,7 @@ Simulate multiple distributed agents with delayed communication.
 Returns `(logs, loss_history)` or just `logs` if `loss_model` is `nothing`.
 
 # Arguments
-- `callback`: a function of the form `callback(xs,zs,us,t) -> nothing` that runs at
+- `callback`: a function of the form `callback(xs,zs,us,loss,t) -> nothing` that runs at
 every time step.
 """
 function simulate(
@@ -118,7 +118,9 @@ function simulate(
         @unpack central, x_weights, u_weights = loss_model
         modeled_dynamics = loss_model.world_model
         s_c = init_state(central, t0)
-        loss_history = AxisArray(-ones(ℝ, tf-t0+1, N, 2), time=t0:tf, id=1:N, comp=[:u, :x])
+        loss_cache = AxisArray(-ones(ℝ, N, 2), id=1:N, comp=[:u, :x])
+    else
+        loss_cache = nothing
     end
 
     # the *actual* state, observation, and actuation at the current time step
@@ -161,9 +163,6 @@ function simulate(
             us .= first.(act_qs)
         end
 
-        # record results
-        callback(xs,zs,us,t)
-
         # record loss
         if loss_model !== nothing
             if is_act_time(t)
@@ -172,10 +171,13 @@ function simulate(
             for i in 1:N
                 x_loss = sum((xs[i] .- xs_idl[i]).^2 .* x_weights[i])
                 u_loss = sum((collect(us[i]) .- us_idl[i]).^2 .* u_weights[i])
-                loss_history[time=atvalue(t), id = i, comp=:u] = u_loss
-                loss_history[time=atvalue(t), id = i, comp=:x] = x_loss
+                loss_cache[id = i, comp=:u] = u_loss
+                loss_cache[id = i, comp=:x] = x_loss
             end
         end
+
+        # record results
+        callback(xs, zs, us, loss_cache, t)
 
         # update physics
         if loss_model === nothing
@@ -193,11 +195,7 @@ function simulate(
         end
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
-    if loss_model === nothing
-        return logs
-    else
-        return logs, loss_history
-    end
+    return logs
 end
 
 """
@@ -218,6 +216,7 @@ function simulate(
     init_status::Each{Tuple{X,Z,U}},
     recorder::Tuple{Vector{String},Function},
     times::AbstractVector{𝕋};
+    loss_model::Union{RegretLossModel, Nothing} = nothing,
     kwargs...
 ) where {X,Z,U,Msg,Log,N}
     @assert !isempty(times)
@@ -225,9 +224,12 @@ function simulate(
     comps, record_f = recorder
     result = TrajectoryData(times, N, comps)
     data_idx = 1
-    tspan = times[1], times[end]
+    t0, tf = times[1], times[end]
+    if loss_model !== nothing
+        loss_history = AxisArray(-ones(ℝ, tf-t0+1,  N, 2), time=t0:tf, id=1:N, comp=[:u, :x])
+    end
 
-    function callback(xs,zs,us,t)
+    function callback(xs,zs,us,loss,t)
         if t == times[data_idx]
             data = record_f(xs, zs, us)
             @assert size(data) == (N, length(comps)) ("The recorder should "
@@ -235,10 +237,12 @@ function simulate(
             result.values[data_idx, :, :] = data
             data_idx += 1
         end
+        (loss_model !== nothing) && (loss_history[atvalue(t), :, :] = loss)
     end
 
-    sim_out = simulate(world_dynamics, delay_model, framework, init_status, 
-        callback, tspan; kwargs...)
+    logs = simulate(world_dynamics, delay_model, framework, init_status, 
+        callback, (t0, tf); kwargs...)
+    sim_out = (loss_model !== nothing) ? (logs, loss_history) : logs
     
     result, sim_out
 end
