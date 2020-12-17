@@ -160,7 +160,6 @@ function draw_view(ui, freq, init, central, dy_model, form_from_id)
         c = colors[id]
         cmap = [with_alpha(c, 0.4), with_alpha(c, 1)]
         color = range(0, 1, length = traj_len)
-        # cam = Makie.cam2d!(ax_view.scene, panbutton = Mouse.left, selectionbutton = (Keyboard.space, Mouse.right))
         lines!(ax_view, traj_x, traj_y; color, colormap = cmap, linewidth=3)
     end
     # draw cars
@@ -181,7 +180,8 @@ end
 function live_demo()
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
-    freq = 100.0
+    ΔT = 5
+    freq = 20.0 * ΔT
     delta_t = 1 / freq
 
     max_v = 5.0
@@ -190,7 +190,7 @@ function live_demo()
     ui = build_ui(max_v, max_ψ, formation_names)
 
     # Car dynamics parameters
-    dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
+    dy_model = CarDynamics(;delta_t, max_ψ = 45°, integrator_samples = round_ceil(5 / ΔT))
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
         x + ui.dy_noise.value[] * CarX(
@@ -233,12 +233,10 @@ function live_demo()
     end
     leader_z_dy = FormationObsDynamics(external_control, external_formation)
 
-    # running at 20Hz
-    # delays_model  = DelayModel(obs = 3, act = 8, com = 7, ΔT = 5)
-    delays_model  = DelayModel(obs = 1, act = 1, com = 1, ΔT = 5)
+    delays_model  = DelayModel(obs = 2, act = 4, com = 6, ΔT = ΔT)
+    # delays_model  = DelayModel(obs = 0, act = 0, com = 4ΔT, ΔT = ΔT)
     delays_actual = delays_model
     H = 20
-    ΔT = delays_model.ΔT
 
     RefK = RefPointTrackControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
@@ -260,8 +258,10 @@ function live_demo()
     x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
     u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
-    framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-    # framework = OvCF(loss_model, delays_model; Z, H)
+
+    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
+    # framework = LocalCF(central, world_model, delays_model; X, Z)
+    framework = OvCF(loss_model, delays_model; Z, H)
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
 

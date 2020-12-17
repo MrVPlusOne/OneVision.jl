@@ -33,7 +33,7 @@ end
     "rate of convergence for v to converge to v̂"
     k_v::ℝ = 5.0
     "rate of convergence for ψ to converge to ψ̂"
-    k_ψ::ℝ = 5.0
+    k_ψ::ℝ = 10.0
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
@@ -80,7 +80,7 @@ function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
     dt = dy.delta_t / N
     @inline f(x) = sys_derivates(dy, x, u)
 
-    x′ = integrate_forward_invariant(f, x, dt, Euler, N)
+    x′ = integrate_forward_invariant(f, x, dt, RK38, N)
     dy.add_noise(x′,t)
 end
 

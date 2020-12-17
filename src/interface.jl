@@ -197,9 +197,9 @@ function write_logs(
     @require_impl
 end
 
-struct WorldDynamics{N,XDynamics <: Tuple,UDynamics <: Tuple}
+struct WorldDynamics{N,XDynamics <: Tuple,ZDynamics <: Tuple}
     dynamics::XDynamics
-    obs_dynamics::UDynamics
+    obs_dynamics::ZDynamics
 
     WorldDynamics(info::Each{<:Tuple{SysDynamics,ObsDynamics}}) = begin
         ds = Tuple(first.(info))

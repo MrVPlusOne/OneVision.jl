@@ -27,7 +27,7 @@ The OneVision Controller Framework.
 """
 @kwdef struct OvCF{N,X,Z,U,S,H} <: ControllerFramework{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
     central::CentralControl{U,S}
-    world_model::WorldDynamics
+    world_model::WorldDynamics{N}
     delay_model::DelayModel
     x_weights::SVector{N,X}
     u_weights::SVector{N,U}
