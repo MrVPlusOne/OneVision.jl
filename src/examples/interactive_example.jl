@@ -73,6 +73,11 @@ function build_ui(max_v, max_ψ, formation_names)
     )
 end
 
+function tryset_ylims(scene, (lower, upper), margin = 0.1)
+    Δ = upper - lower
+    (Δ != 0) && ylims!(scene, (lower - margin * Δ, upper + margin * Δ))
+end
+
 function draw_view(ui, freq, init, central, dy_model, form_from_id)
     @unpack ax_view, display_layout, formation_control, scene = ui
 
@@ -103,14 +108,21 @@ function draw_view(ui, freq, init, central, dy_model, form_from_id)
         display_layout[end+1,1] = LAxis(scene, title = title, 
             xzoomlock = true, xpanlock = true, yrectzoom = true)
     end
-    total_ax, x_ax, u_ax = loss_ax.(["Total Loss", "X Loss", "U Loss"])
+    ax_total, ax_x, ax_u = loss_ax.(["Total Loss", "X Loss", "U Loss"])
     trim!(display_layout)
     
     for i in 1:N
-        lines!(x_ax, 1:loss_len, x_loss[i]; color=colors[i])
-        lines!(u_ax, 1:loss_len, u_loss[i]; color=colors[i])
+        lines!(ax_x, 1:loss_len, x_loss[i]; color=colors[i])
+        lines!(ax_u, 1:loss_len, u_loss[i]; color=colors[i])
     end
-    lines!(total_ax, 1:loss_len, total_loss; color=:red)
+    lines!(ax_total, 1:loss_len, total_loss; color=:red)
+    on(total_loss) do loss
+        tryset_ylims(ax_total, (minimum(loss), maximum(loss)))
+        get_min(losses) = minimum(n -> minimum(n[]), losses)
+        get_max(losses) = maximum(n -> maximum(n[]), losses)
+        tryset_ylims(ax_x, (get_min(x_loss), get_max(x_loss)))
+        tryset_ylims(ax_u, (get_min(u_loss), get_max(u_loss)))
+    end
     
     function draw_refs(ctrl::FormationControl{RefPointTrackControl})
         refpoints = @lift let
