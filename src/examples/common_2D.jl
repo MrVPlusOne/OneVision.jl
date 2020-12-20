@@ -1,3 +1,5 @@
+default_delays = DelayModel(obs = 2, act = 4, com = 6, ΔT = 5)
+
 @kwdef struct CarX{R} <: FieldVector{5,R}
     "x position"
     x::R

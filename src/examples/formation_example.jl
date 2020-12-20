@@ -56,15 +56,19 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
 end
 
 
-function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
-        dynamics_noise = 0.005, sensor_noise = dynamics_noise)
+function formation_example(;time_end = 20.0, freq = 100.0, 
+        dynamics_noise = 0.005, sensor_noise = dynamics_noise, 
+        delays = default_delays,
+        CF = OvCF,
+        plot_result = true,
+    )
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
     # Car dynamics parameters
-    dy_model  = CarDynamics(;delta_t, max_ψ = 45°)
+    dy_model = CarDynamics(;delta_t, max_ψ = 45°)
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
         x + CarX(x=0.0, y=0.0, θ=0.0, 
@@ -96,8 +100,8 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
     leader_z_dy = FormationObsDynamics(external_control, external_formation)
 
     # running at 20Hz
-    delays_model  = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
-    delays_actual = DelayModel(obs = 3, act = 6, com = 13, ΔT = 5)
+    delays_model  = delays
+    delays_actual = delays_model
     H = 20
     ΔT = delays_model.ΔT
 
@@ -121,12 +125,21 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
     end
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
-    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-    framework = let 
-        x_weights = fill(X(x = 1, y = 1, θ = 1), N)
-        u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delays_model, x_weights, u_weights; X, Z, N, H)
+    loss_model = let 
+        x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
+        u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
+        RegretLossModel(central, world_model, x_weights, u_weights)
     end
+    framework = 
+        if CF == NaiveCF
+            NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
+        elseif CF == LocalCF
+            LocalCF(central, world_model, delays; X, Z)
+        elseif CF == OvCF
+            OvCF(loss_model, delays_model; Z, H)
+        else
+            error("Unexpected CF: $CF")
+        end
 
     comps = ["x", "y", "θ", "ψ", "v"]
     function record_f(xs, zs, us)
@@ -136,11 +149,12 @@ function formation_example(;freq = 100.0, time_end = 20.0, plot_result = true,
 
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
-    result, logs = simulate(
-        world, delays_actual, framework, init, (comps, record_f), 1:t_end; xs_observer)
+    result, (logs, loss) = simulate(
+        world, delays_actual, framework, init, (comps, record_f), 1:t_end
+        ; xs_observer, loss_model)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_formation(result, freq, central) |> display
     end
-    result, logs
+    loss
 end

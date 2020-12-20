@@ -237,11 +237,14 @@ function simulate(
             result.values[data_idx, :, :] = data
             data_idx += 1
         end
-        (loss_model !== nothing) && (loss_history[atvalue(t), :, :] = loss)
+        if loss_model !== nothing
+            @assert loss !== nothing
+            loss_history[atvalue(t), :, :] = loss
+        end
     end
 
     logs = simulate(world_dynamics, delay_model, framework, init_status, 
-        callback, (t0, tf); kwargs...)
+        callback, (t0, tf); loss_model, kwargs...)
     sim_out = (loss_model !== nothing) ? (logs, loss_history) : logs
     
     result, sim_out

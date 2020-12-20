@@ -87,3 +87,6 @@ function OneVision.make_controllers(
     msg_qs = ntuple(mk_q, N)
     ctrls, msg_qs
 end
+
+# LocalCF has nothing to log
+OneVision.write_logs(::LocalController) = Dict{𝕋,Nothing}()

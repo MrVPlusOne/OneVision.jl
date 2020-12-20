@@ -3,6 +3,7 @@ export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef
+using OneVision.Car2DExamples: default_delays
 using Random
 using StaticArrays
 using Plots
@@ -100,16 +101,19 @@ OneVision.control_one(
     CarU(acc)
 end
 
-function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_prediction = false)
+function run_example(;time_end = 20.0, freq::ℝ = 100.0, 
+        delays = default_delays,
+        CF = OvCF,
+        noise = 0.0, plot_result = true, log_prediction = false)
+    t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
-    times::Vector{𝕋} = collect(times)
+    times::Vector{𝕋} = collect(1:t_end)
     idx_to_time(xs) = (xs .- 1) .* delta_t
-    t0, t_end = times[1], times[end]
     rng = MersenneTwister(1234)
     
     agent_info(id) = begin
-        acc_noise = randn(rng, ℝ, 1 + t_end - t0) * noise
-        sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[1 + t - t0]))
+        acc_noise = randn(rng, ℝ, t_end) * noise
+        sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[t]))
         obs_dy = 
             if id == 1; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
             else WallObsModel() end
@@ -120,8 +124,7 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
     N = 2
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
     init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
-    ΔT = 3
-    delays = DelayModel(obs = 2, act = 4, com = 5, ΔT = ΔT)  # DelayModel(obs=1, act=2, com=5)
+    ΔT = delays.ΔT
     world_model = WorldDynamics(
         fill((car_system(delta_t), WallObsModel()), N))
 
@@ -135,16 +138,20 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
     x_weights = SVector{N}(fill(CarX(1.0, 1.0), N))
     u_weights = SVector{N}(fill(CarU(1.0), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
+    framework =
+        if CF == NaiveCF
+            NaiveCF(CarX{ℝ}, CarZ{ℝ}, N, central, msg_queue_length(delays), ΔT)
+        elseif CF == LocalCF
+            LocalCF(central, world_model, delays; X = CarX{ℝ}, Z = CarZ{ℝ})
+        elseif CF == OvCF
+            OvCF(loss_model, delays; Z = CarZ{ℝ}, H)
+        else
+            error("Unexpected CF: $CF")
+        end
     result, (logs, loss) = simulate(
         world_dynamics, 
         delays,
-        # NaiveCF(CarX{ℝ}, CarZ{ℝ}, N, central, delays.com, ΔT),
-        OvCF(loss_model, delays;
-            Z = CarZ{ℝ}, H,
-            # save_log = FuncT(Tuple{ℕ,𝕋,CarX{ℝ},CarZ{ℝ}}, Bool) do (id, t, _, _) 
-            #     log_prediction && mod1(t, 2) == 2 && 0.0 ≤ (t - 1) * delta_t ≤ 10.0
-            # end
-        ),
+        framework,
         init_states,
         (comps, record_f),
         times;
@@ -173,7 +180,9 @@ function run_example(times, freq::ℝ; noise = 0.0, plot_result = true, log_pred
         end
         anim |> display
     end
-    plot_result ? display(visualize(result; delta_t, loss)) : result
+    plot_result && display(visualize(result; delta_t, loss))
+    
+    loss
 end
 
 end # Car1DExampleLabeled
