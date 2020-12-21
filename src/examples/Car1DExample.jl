@@ -3,7 +3,7 @@ export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef
-using OneVision.Car2DExamples: default_delays
+using OneVision.Examples: default_delays
 using Random
 using StaticArrays
 using Plots
@@ -86,7 +86,7 @@ OneVision.control_one(
     x, z = xs[id], zs[id]
     if t ≤ lf.warm_up_time
         acc = 0.0
-    elseif Bool(z.detected) && z.distance - x.pos ≤ lf.stop_distance
+    elseif Bool(round(z.detected)) && z.distance - x.pos ≤ lf.stop_distance
         acc = bang_bang(0.0, x.velocity, lf.k_v, tol)
     elseif id == 1
         # the leader

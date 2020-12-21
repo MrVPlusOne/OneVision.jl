@@ -1,13 +1,6 @@
-if isdefined(@__MODULE__, :LanguageServer)  # hack to make vscode linter work properly
-    include("../src/OneVision.jl")
-    using .OneVision
-    using .OneVision.Car1DExample
-    using .OneVision.Car2DExamples
-else
-    using OneVision
-    using OneVision.Car1DExample
-    using OneVision.Car2DExamples
-end
+using OneVision
+using OneVision.Examples.Car1DExample
+using OneVision.Examples.Car2DExamples
 
 using StaticArrays
 using Plots
@@ -104,9 +97,9 @@ let
 end # Double integrater let
 
 int_tests = (
-    () -> Car1DExample.run_example(1:3 * 20, 20.0; noise = 0.01, plot_result = false),
+    () -> Car1DExample.run_example(time_end = 3, noise = 0.01, plot_result = false),
     () -> Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false),
-    () -> Car2DExamples.formation_example(time_end = 3, dynamics_noise = 0.001, plot_result = false),
+    () -> Car2DExamples.formation_example(time_end = 3, noise = 0.001, plot_result = false),
 )
 @testset "Integration test $i" for (i, f) in enumerate(int_tests)
     f()

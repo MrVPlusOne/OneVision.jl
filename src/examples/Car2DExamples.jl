@@ -4,6 +4,7 @@ using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef, °, @set, @_
 using OneVision.NumericalIntegration
 using OneVision.SymbolMaps
+using OneVision.Examples: default_delays
 
 using Random
 using StaticArrays

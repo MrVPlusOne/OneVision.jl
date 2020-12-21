@@ -118,12 +118,12 @@ struct DelayModel
     total::𝕋
     "control interaval, i.e., the time between adjacent control steps"
     ΔT::𝕋
+end
 
-    DelayModel(;obs, act, com, ΔT = 1) = begin 
-        @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
-        @assert obs ≥ 0 && act ≥ 0 && ΔT ≥ 1
-        new(obs, act, com, obs + act + com, ΔT)
-    end
+DelayModel(;obs, act, com, ΔT = 1) = begin 
+    @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
+    @assert obs ≥ 0 && act ≥ 0 && ΔT ≥ 1
+    DelayModel(obs, act, com, obs + act + com, ΔT)
 end
 
 msg_queue_length(dm::DelayModel) = dm.com ÷ dm.ΔT + 1

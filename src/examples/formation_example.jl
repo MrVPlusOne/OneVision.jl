@@ -57,7 +57,7 @@ end
 
 
 function formation_example(;time_end = 20.0, freq = 100.0, 
-        dynamics_noise = 0.005, sensor_noise = dynamics_noise, 
+        noise = 0.005, sensor_noise = noise, 
         delays = default_delays,
         CF = OvCF,
         plot_result = true,
@@ -72,7 +72,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
         x + CarX(x=0.0, y=0.0, θ=0.0, 
-                v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * dynamics_noise
+                v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * noise
     end
     dy_actual = @set dy_model.add_noise = add_noise
     function xs_observer(xs, t)
