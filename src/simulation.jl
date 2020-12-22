@@ -167,6 +167,7 @@ function simulate(
         if loss_model !== nothing
             if is_act_time(t)
                 us_idl .= control_all(central, s_c, xs_idl, zs_idl, t, SOneTo(N))
+                us_idl .= limit_control.(modeled_dynamics.dynamics, us_idl, xs_idl, t)
             end
             for i in 1:N
                 x_loss = sum((xs[i] .- xs_idl[i]).^2 .* x_weights[i])

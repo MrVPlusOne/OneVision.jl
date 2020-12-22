@@ -271,9 +271,8 @@ function live_demo()
     u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
 
-    # framework = NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-    # framework = LocalCF(central, world_model, delays_model; X, Z)
-    framework = OvCF(loss_model, delays_model; Z, H)
+    framework = mk_cf(onevision_cf, world_model, central, delays_model, loss_model; X, Z, H)
+
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
 

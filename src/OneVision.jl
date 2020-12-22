@@ -10,6 +10,8 @@ include("forward_prediction.jl")
 include("traj_planning.jl")
 include("frameworks/frameworks.jl")
 include("examples/Examples.jl")
+include("Benchmarks.jl")
+
 # include("ros_integration.jl")
 
 end # OneVision

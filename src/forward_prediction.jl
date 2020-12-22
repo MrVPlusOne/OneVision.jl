@@ -52,7 +52,7 @@ function forward_predict!(
     s_c = init_s
 
     for t in 1:Hf
-        us = control_all(prob.π, s_c, xs, zs, τ0 + t - 1, Base.OneTo(N))
+        us = control_all(prob.π, s_c, xs, zs, τ0 + t - 1, SOneTo(N))
         us = limit_control.(x_dy, us, xs, τ0 + t - 1)
         @inbounds for i in 1:N
             xs[i] = sys_forward(x_dy[i], xs[i], us[i], N) + prob.δx[t, i]

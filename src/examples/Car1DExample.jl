@@ -3,7 +3,7 @@ export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef
-using OneVision.Examples: default_delays
+using OneVision.Examples
 using Random
 using StaticArrays
 using Plots
@@ -64,7 +64,10 @@ OneVision.obs_forward(dy::WallObsModel, x::CarX, z::CarZ, t::𝕋) = z
 A controller struct - holds all necessary information 
 """
 @kwdef struct LeaderFollowerControl <: CentralControlStateless{CarU{ℝ}}
-    warm_up_time::𝕋  # Will output u=0 before this time
+    "Will output u=0 before this time"
+    warm_up_time::𝕋  
+    "Will only use bang bang control when difference is larger than this"
+    bang_bang_tol::ℝ = Inf
     k_v::ℝ = 3.0
     k_x::ℝ = 2.0
     stop_distance::ℝ = 4.0
@@ -74,7 +77,7 @@ end
 OneVision.control_one(
     lf::LeaderFollowerControl, xs,zs, t::𝕋, id::ℕ
 )::CarU{ℝ} = begin
-    tol = 1.0
+    tol = lf.bang_bang_tol
     function bang_bang(x̂, x, k, tol)
         if abs(x̂ - x) ≤ tol
             (x̂ - x) * k
@@ -103,19 +106,22 @@ end
 
 function run_example(;time_end = 20.0, freq::ℝ = 100.0, 
         delays = default_delays,
-        CF = OvCF,
-        noise = 0.0, plot_result = true, log_prediction = false)
+        CF::CFName = onevision_cf,
+        noise = 0.0, 
+        has_obstacle = true,
+        use_bang_bang = true,
+        seed = 1, plot_result = true, log_prediction = false)
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
     times::Vector{𝕋} = collect(1:t_end)
     idx_to_time(xs) = (xs .- 1) .* delta_t
-    rng = MersenneTwister(1234)
+    rng = MersenneTwister(seed)
     
     agent_info(id) = begin
         acc_noise = randn(rng, ℝ, t_end) * noise
         sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[t]))
         obs_dy = 
-            if id == 1; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
+            if id == 1 && has_obstacle; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
             else WallObsModel() end
         
         sys_dy, obs_dy
@@ -134,20 +140,16 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     end
     
     H = 20
-    central = LeaderFollowerControl(warm_up_time = delays.act)
+    central = LeaderFollowerControl(
+        warm_up_time = delays.act, 
+        bang_bang_tol = use_bang_bang ? 1.0 : Inf)
     x_weights = SVector{N}(fill(CarX(1.0, 1.0), N))
     u_weights = SVector{N}(fill(CarU(1.0), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
-    framework =
-        if CF == NaiveCF
-            NaiveCF(CarX{ℝ}, CarZ{ℝ}, N, central, msg_queue_length(delays), ΔT)
-        elseif CF == LocalCF
-            LocalCF(central, world_model, delays; X = CarX{ℝ}, Z = CarZ{ℝ})
-        elseif CF == OvCF
-            OvCF(loss_model, delays; Z = CarZ{ℝ}, H)
-        else
-            error("Unexpected CF: $CF")
-        end
+    framework = mk_cf(
+        CF, world_model, central, delays, loss_model; 
+        X = CarX{ℝ}, Z = CarZ{ℝ}, H)
+
     result, (logs, loss) = simulate(
         world_dynamics, 
         delays,

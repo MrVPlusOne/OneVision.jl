@@ -1,4 +1,4 @@
-function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
+function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl, formation_at_t)
     scene, layout = layoutscene(resolution = (1600, 1600))
 
     ax_traj = layout[1,1] = LAxis(
@@ -31,7 +31,7 @@ function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl)
     refpoints = @lift let
         x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
         leader = CarX(;x, y, θ, ψ, v)
-        @_ (ctrl.formation(nothing, nothing, $t) 
+        @_ (formation_at_t($t) 
             |> map(ref_point(ctrl.K, _),__) 
             |> map(to_formation_frame(ctrl, leader), __))
     end
@@ -59,7 +59,8 @@ end
 function formation_example(;time_end = 20.0, freq = 100.0, 
         noise = 0.005, sensor_noise = noise, 
         delays = default_delays,
-        CF = OvCF,
+        CF::CFName = onevision_cf,
+        switch_formation = true,
         plot_result = true,
     )
     X, U = CarX{ℝ}, CarU{ℝ}
@@ -80,21 +81,25 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     end
 
     function external_control(_, t)
-        if t ≤ 3 * freq
+        (if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
         elseif t ≤ 5 * freq
-            U(v̂ = 1.0, ψ̂ = 10°)
-        elseif t ≤ 8 * freq
+            U(v̂ = 1.0, ψ̂ = 8°)
+        elseif t ≤ 9 * freq
             U(v̂ = 1.0, ψ̂ = 0°)
         elseif t ≤ 15 * freq
             U(v̂ = 2.0, ψ̂ = 2°)
         else
             U(v̂ = 2(1 - (t/freq-15)/5), ψ̂ = 2°)
-        end
+        end) + U(v̂ = randn(rng, ℝ), ψ̂ = randn(rng, ℝ)) * noise/4
     end
 
     function external_formation(_, t)
-        1
+        if t ≥ 8 * freq && switch_formation
+            2
+        else
+            1
+        end
     end
 
     leader_z_dy = FormationObsDynamics(external_control, external_formation)
@@ -106,22 +111,35 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     ΔT = delays_model.ΔT
 
     N = 4
-    formation = begin
+    triangle_formation = let
         l = 0.8
         Δϕ = 360° / (N-1) 
         circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
         [[zero(X)]; circle]
     end
+    vertical_formation = let
+        l = 0.6
+        leader_idx = round_ceil(N/2)
+        line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+
+    formations = [triangle_formation, vertical_formation]
+    form_from_id(i) = formations[i]
 
     RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, kp = 1.0, ki = 0.0, kd = 0.0)
+        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+        kp = 1.0, ki = 0.0, kd = 0.0)
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
-    central = FormationControl((xs, zs, t) -> formation, RefK, dy_model, avoidance)
-
-    formation = rotate_formation(formation, 0°)
-    init = map(1:N) do i 
-        x = formation[i]
-        x, zero(Z), zero(U)
+    central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
+        RefK, dy_model, avoidance)
+    
+    init = let 
+        formation = rotate_formation(form_from_id(1), 0°)
+        map(1:N) do i 
+            x = formation[i]
+            x, HVec(zero(U), 1), zero(U)
+        end
     end
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
@@ -130,16 +148,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
         u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
-    framework = 
-        if CF == NaiveCF
-            NaiveCF(X, Z, N, central, msg_queue_length(delays_model), ΔT)
-        elseif CF == LocalCF
-            LocalCF(central, world_model, delays; X, Z)
-        elseif CF == OvCF
-            OvCF(loss_model, delays_model; Z, H)
-        else
-            error("Unexpected CF: $CF")
-        end
+    framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
 
     comps = ["x", "y", "θ", "ψ", "v"]
     function record_f(xs, zs, us)
@@ -154,7 +163,8 @@ function formation_example(;time_end = 20.0, freq = 100.0,
         ; xs_observer, loss_model)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
-        plot_formation(result, freq, central) |> display
+        plot_formation(result, freq, central, 
+            t -> form_from_id(external_formation(missing, t))) |> display
     end
     loss
 end
