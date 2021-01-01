@@ -6,18 +6,17 @@ struct ForwardPredictProblem{N,Hf,X,Z,U,Dy,Ctrl}
     world_dynamics::Dy
     π::Ctrl
     δx::MMatrix{Hf,N,X}
-    δz::MMatrix{Hf,N,Z}
+    z_obs::SizedMatrix{Hf,N,Optional{Z}}
 
     function ForwardPredictProblem(
         world_dynamics::Dy, π::Ctrl; X, Z, Hf,
     ) where {N,U,Dy <: WorldDynamics{N},Ctrl <: CentralControl{U}}
         @assert isbitstype(X) "X = $X is not of bits type"
-        @assert isbitstype(Z) "Z = $Z is not of bits type"
         @assert isbitstype(U) "U = $U is not of bits type"
         new{N,Hf,X,Z,U,Dy,Ctrl}(
             world_dynamics, π, 
             MMatrix{Hf,N,X}(fill(zero(X), Hf, N)),
-            MMatrix{Hf,N,Z}(fill(zero(Z), Hf, N)))
+            SizedMatrix{Hf,N,Optional{Z}}(fill(missing, Hf, N)))
     end
 end
 
@@ -29,7 +28,7 @@ Note that `init_s` will be modified from `t=t0` to `t=t0+ΔT`. (It will then be 
 
 # Argument Details
 - `prob.δx`: state disturbance ∈ [t0, t0+H-1]
-- `prob.δz`: observation disturbance ∈ [t0, t0+H-1]
+- `prob.z_obs`: observation ∈ [t0, t0+H-1]
 - `init_xz`: state `x` and observation `z` at time t0
 - `init_s`: central control state at time t0, will be modified to t0+1.
 """
@@ -41,11 +40,11 @@ function forward_predict!(
     ΔT::𝕋,
 ) where {X,Z,U,S,N,Hf}
     x_traj = MMatrix{Hf,N,X}(undef)
-    z_traj = MMatrix{Hf,N,Z}(undef)
+    z_traj = SizedMatrix{Hf,N,Z}(undef)
     u_traj = MMatrix{Hf,N,U}(undef)
 
     xs = MVector{N,X}(first.(init_xz))
-    zs = MVector{N,Z}(last.(init_xz))
+    zs = SizedVector{N,Z}(last.(init_xz))
     x_dy = prob.world_dynamics.dynamics
     z_dy = prob.world_dynamics.obs_dynamics
 
@@ -56,7 +55,8 @@ function forward_predict!(
         us = limit_control.(x_dy, us, xs, τ0 + t - 1)
         @inbounds for i in 1:N
             xs[i] = sys_forward(x_dy[i], xs[i], us[i], N) + prob.δx[t, i]
-            zs[i] = obs_forward(z_dy[i], xs[i], zs[i], N) + prob.δz[t, i]
+            z = prob.z_obs[t, i]
+            zs[i] = (z === missing) ? obs_forward(z_dy[i], xs[i], zs[i], N) : z
         end
         x_traj[t,:] = xs
         z_traj[t,:] = zs

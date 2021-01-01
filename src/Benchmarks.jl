@@ -50,21 +50,25 @@ setting_args = [
 
 function run_benchmarks()
     num_tasks = length(setting_args) * length(benchmarks)
-    prog = Progress(num_tasks+1, 0.1, "Running benchmarks...")
+    prog = Progress(num_tasks+1+length(setting_args), 0.1, "Running benchmarks...")
 
-    for (setname, setting) in setting_args
+    iolock = ReentrantLock()
+    Threads.@threads for (setname, setting) in setting_args
         rows = []
         for (name, ex) in benchmarks
             results = [
-                cf_str => sum(ex(;plot_result = false, CF, setting...)) / freq 
+                cf_str => sum(ex(;plot_result = false, CF, setting...)) / setting[:freq]
                 for (cf_str, CF) in CFs]
             push!(rows, (task = name, results...))
             next!(prog)
         end
         sep = " "^displaysize(stdout)[2]
-        println("\r$sep")
-        println("Setting: $setname")
-        DataFrame(rows) |> display
+        lock(iolock) do
+            println("\r$sep")
+            println("Setting: $setname")
+            DataFrame(rows) |> display
+            next!(prog)
+        end
     end
     finish!(prog)
 end

@@ -14,6 +14,8 @@ using StaticArrays
 using AxisArrays
 using MacroTools: @capture
 
+Optional{T} = Union{T, Missing}
+
 "A placeholder for unimplmeneted code."
 macro todo()
     :(error("TODO: Not implemented."))
@@ -35,10 +37,6 @@ end
 
 @inline function (f::FuncT{X,Y})(x::X)::Y where {X,Y}
     f.f(x)
-end
-
-function constant_queue(value::T, q_size)::FixedQueue{T} where {T}
-        FixedQueue(fill(value, q_size))
 end
 
 "Convert a 2-D column vector to a 1-D vector.\n"
@@ -161,6 +159,10 @@ function Base.iterate(q::FixedQueue{T}, state::Int = 0) where T
     end
 end
 
+function constant_queue(value::T, q_size; eltype::Type{E} = T)::FixedQueue{E} where {T,E}
+    FixedQueue(convert(Vector{E}, fill(value, q_size)))
+end
+
 Base.length(q::FixedQueue) = q.len
 
 Base.lastindex(q::FixedQueue) = q.len
@@ -263,24 +265,10 @@ to_matrix(xs::AbstractVector{X}) where X =
     [x[i] for x in xs, i in 1:length(X)]
 
 
-    """
+"""
 Hybrid Vector with both continuous and discrete parts.
-Both `C` and `D` should support these operations: `zero`, `:+`, `:-`.
 """
 struct HVec{C, D}
     c::C
     d::D
-end
-
-function Base.zero(::Type{HVec{C,D}}) where {C,D}
-    HVec(zero(C), zero(D))
-end
-function Base.zero(::HVec{C,D}) where {C,D}
-    zero(HVec{C,D})
-end
-function Base.:-(v1::HVec{C,D}, v2::HVec{C,D}) where {C,D}
-    HVec(v1.c - v2.c, v1.d - v2.d)
-end
-function Base.:+(v1::HVec{C,D}, v2::HVec{C,D}) where {C,D}
-    HVec(v1.c + v2.c, v1.d + v2.d)
 end

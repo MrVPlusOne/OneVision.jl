@@ -3,8 +3,8 @@ export OvCF, OvController, OvMsg
 import Optim
 
 struct OvMsg{X,Z}
-    xz::Tuple{X,Z}
-    δxz::Tuple{X,Z}
+    δx::X
+    z::Optional{Z}
 end
 
 """
@@ -14,7 +14,8 @@ struct OvLog{X,Z,U}
     ũ::Matrix{U}
     x̃::Matrix{X}
     z̃::Matrix{Z}
-    δxz::Tuple{X,Z}
+    δx::X
+    z::Z
 end
 
 function to_array(m::MMatrix{n1,n2,T}) where {n1,n2,T}
@@ -63,10 +64,11 @@ end
     cf::OvCF{N,X,Z,U,S,H}
     τ::𝕋                                # -- At the start of each controll step --
     u_history::FixedQueue{U}            # t ∈ [τ-Tx,τ+Tu-1]
-    "predicted x and z made from last control step, used to measure disturbance."
-    pred_xz::Tuple{X,Z}                 # t = τ-Tx
+    "predicted x from last control step, used to measure disturbance."
+    pred_x::X                           # t = τ-Tx
     "self disturbance history"
-    self_δxz::FixedQueue{Tuple{X,Z}}    # t ∈ [τ-Tx-Tc-ΔT-1, τ-Tx-2]
+    self_δx::FixedQueue{X}              # t ∈ [τ-Tx-Tc-ΔT-1, τ-Tx-2]
+    self_z::FixedQueue{Optional{Z}}     # t ∈ [τ-Tx-Tc-ΔT, τ-Tx-1]
     ideal_xz::Each{Tuple{X,Z}}          # t = τ-Tx-Tc-ΔT
     ideal_s::S                          # t = τ-Tx-Tc-ΔT
     fp_prob::ForwardPredictProblem{N,Hf,X,Z,U,WDy,Ctrl}
@@ -92,8 +94,9 @@ function OneVision.make_controllers(
         x0, z0, u0 = init_status[id]
         u_history = constant_queue(u0, dm.obs + dm.act)
         x_dy = cf.world_model.dynamics[id]
-        pred_xz = (x0, z0)
-        self_δxz = constant_queue((zero(X), zero(Z)), dm.com + ΔT)
+        pred_x = x0
+        self_δx = constant_queue(zero(X), dm.com + ΔT)
+        self_z = constant_queue(missing, dm.com + ΔT, eltype=Optional{Z})
         ideal_xz = [(x, z) for (x, z, _) in init_status]
         ideal_s = init_state(cf.central, t0)
 
@@ -107,13 +110,14 @@ function OneVision.make_controllers(
         )
 
         OvController(;
-            id, cf, τ = t0 - 1, u_history, pred_xz, self_δxz, ideal_xz, ideal_s, 
+            id, cf, τ = t0 - 1, u_history, pred_x, 
+            self_δx, self_z, ideal_xz, ideal_s, 
             fp_prob, plan_prob, logs = Dict{𝕋,OvLog{X,Z,U}}(),
         )
     end
 
     function mk_q(_)
-        receives = [OvMsg((x, z), (zero(x), zero(z))) for (x, z, u) in init_status]
+        receives = [OvMsg{X,Z}(zero(x), missing) for (x, z, u) in init_status]
         constant_queue(receives, msg_queue_length(dm))
     end
 
@@ -134,10 +138,14 @@ function OneVision.control!(
     fp_prob = π.fp_prob
 
     π.τ += ΔT
-    δxz = ((x, z) .- π.pred_xz)  # δxz: t = τ-Tx-1
-    foreach(1:ΔT-1) do _; pushpop!(π.self_δxz, (zero(x), zero(z))) end  
-    pushpop!(π.self_δxz, δxz) # π.self_δxz: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
-    new_msg = OvMsg((x, z), δxz)
+    δx = x - π.pred_x           # δx: t = τ-Tx-1
+    for _ in 1:ΔT-1
+        pushpop!(π.self_δx, zero(x))
+        pushpop!(π.self_z, missing)
+    end  
+    pushpop!(π.self_δx, δx)     # π.self_δx: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
+    pushpop!(π.self_z, z)       # π.self_z: t ∈ [τ-Tx-Tc, τ-Tx]
+    new_msg = OvMsg(δx, z)
     should_log = π.cf.save_log((id, π.τ, x, z))
 
     x_self = isempty(π.u_history) ? x : self_estimate(
@@ -151,16 +159,14 @@ function OneVision.control!(
         if j == id continue end
         for t in 1:ΔT - 1
             fp_prob.δx[t, j] = zero(X)
-            fp_prob.δz[t, j] = zero(Z)
+            fp_prob.z_obs[t, j] = missing
         end
-        δx, δz = msgs[j].δxz
+        @unpack δx, z = msgs[j]
         fp_prob.δx[ΔT, j] = δx
-        fp_prob.δz[ΔT, j] = δz
+        fp_prob.z_obs[ΔT, j] = z
     end
-    for (t, (δx, δz)) in enumerate(π.self_δxz)
-        fp_prob.δx[t,id] = δx
-        fp_prob.δz[t,id] = δz
-    end
+    fp_prob.δx[1:length(π.self_δx),id] = collect(π.self_δx)
+    fp_prob.z_obs[1:length(π.self_z),id] = collect(π.self_z)
 
     # x̃[t in τ-Tx-Tc-ΔT+1: τ+Tu+HΔT], ũ[t in τ-Tx-Tc-ΔT: τ+Tu+HΔT-1]
     ũ, x̃, z̃ = forward_predict!(
@@ -180,15 +186,13 @@ function OneVision.control!(
     
     u = u_plan[1]
 
-    π.pred_xz = let x1 = x, z1 = z
+    π.pred_x = let x1 = x, z1 = z
         x_dy = world.dynamics[id]
-        z_dy = world.obs_dynamics[id]
         for t = (π.τ - dm.obs):(π.τ - dm.obs + ΔT - 1)
             u_old = pushpop!(π.u_history, u)  # u_old at t = τ-Tx
             x1 = sys_forward(x_dy, x1, u_old, t)
-            z1 = obs_forward(z_dy, x1, z1, t)
         end
-        (x1, z1)
+        x1
     end
 
     if should_log 

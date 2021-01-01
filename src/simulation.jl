@@ -103,7 +103,6 @@ function simulate(
     xs_observer = (xs, t) -> xs,
     zs_observer = (zs, t) -> zs,
 ) where {X,Z,U,Msg,Log,N}
-    @assert isbitstype(Msg) "Msg = $Msg"
     @assert tf ≥ t0
 
     ΔT = delay_model.ΔT
@@ -114,7 +113,7 @@ function simulate(
 
     if loss_model !== nothing
         # the *ideal* state and observation at the current time step
-        xs_idl, zs_idl, us_idl = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
+        xs_idl, _, us_idl = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
         @unpack central, x_weights, u_weights = loss_model
         modeled_dynamics = loss_model.world_model
         s_c = init_state(central, t0)
@@ -135,7 +134,7 @@ function simulate(
 
     # we store the newest messages/actions into these caches and wait until 
     # the next control/actuation step to push them into the queues to take effect.
-    msg_cache = MMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
+    msg_cache = SizedMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
     act_cache = MVector{N, U}(first.(act_qs))
     for t in t0:tf
         if is_obs_time(t)
@@ -166,7 +165,7 @@ function simulate(
         # record loss
         if loss_model !== nothing
             if is_act_time(t)
-                us_idl .= control_all(central, s_c, xs_idl, zs_idl, t, SOneTo(N))
+                us_idl .= control_all(central, s_c, xs_idl, zs, t, SOneTo(N))
                 us_idl .= limit_control.(modeled_dynamics.dynamics, us_idl, xs_idl, t)
             end
             for i in 1:N
@@ -181,19 +180,15 @@ function simulate(
         callback(xs, zs, us, loss_cache, t)
 
         # update physics
-        if loss_model === nothing
-            xs .= sys_forward.(world_dynamics.dynamics, xs, us, t)
-            zs .= obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
-        else
-            xs1 = sys_forward.(world_dynamics.dynamics, xs, us, t)
-            zs1 = obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+        xs1 = sys_forward.(world_dynamics.dynamics, xs, us, t)
+        zs1 = obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
+        if loss_model !== nothing
             xs2 = sys_forward.(modeled_dynamics.dynamics, xs, us, t)
-            zs2 = obs_forward.(modeled_dynamics.obs_dynamics, xs, zs, t)
             xs_idl .= sys_forward.(modeled_dynamics.dynamics, xs_idl, us_idl, t) .+ (xs1.-xs2)
-            zs_idl .= obs_forward.(modeled_dynamics.obs_dynamics, xs_idl, zs_idl, t) .+ (zs1-zs2)
             xs .= xs1
-            zs .= zs1
         end
+        xs .= xs1
+        zs .= zs1
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
     return logs
