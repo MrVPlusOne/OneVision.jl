@@ -2,7 +2,8 @@ export ℝ, ℕ, 𝕋, Each, round_ceil, round_floor
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
 export ObsDynamics, StaticObsDynamics
 export sys_forward, limit_control, sys_A, sys_B, sys_w, obs_forward
-export DelayModel, WorldDynamics, RegretLossModel, msg_queue_length, short_delay_names
+export DelayModel, short_delay_names, total_delay, msg_queue_length
+export WorldDynamics, RegretLossModel
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
@@ -115,22 +116,22 @@ struct DelayModel
     act::𝕋
     "communication delay: Tc"
     com::𝕋
-    "total delay"
-    total::𝕋
     "control interaval, i.e., the time between adjacent control steps"
     ΔT::𝕋
 end
 
+total_delay(dm::DelayModel) = dm.obs + dm.act + dm.com
+
 @inline short_delay_names(dm::DelayModel) = 
-    (Tx = dm.obs, Tu = dm.act, Tc = dm.com, Ta = dm.total, ΔT = dm.ΔT)
+    (Tx = dm.obs, Tu = dm.act, Tc = dm.com, Ta = total_delay(dm), ΔT = dm.ΔT)
 
 DelayModel(;obs, act, com, ΔT = 1) = begin 
     @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
     @assert obs ≥ 0 && act ≥ 0 && ΔT ≥ 1
-    DelayModel(obs, act, com, obs + act + com, ΔT)
+    DelayModel(obs, act, com, ΔT)
 end
 
-msg_queue_length(dm::DelayModel) = dm.com ÷ dm.ΔT + 1
+msg_queue_length(dm::DelayModel) = dm.com
 
 
 """

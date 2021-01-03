@@ -53,24 +53,35 @@ function run_benchmarks()
     prog = Progress(num_tasks+1+length(setting_args), 0.1, "Running benchmarks...")
 
     iolock = ReentrantLock()
+
+    function display_table(rows, name)
+        sep = " "^displaysize(stdout)[2]
+        println("\r$sep")
+        println("Setting: $name")
+        DataFrame(rows) |> display
+    end
+
+    tables = Dict{String, Any}()
     Threads.@threads for (setname, setting) in setting_args
         rows = []
         for (name, ex) in benchmarks
             results = [
                 cf_str => sum(ex(;plot_result = false, CF, setting...)) / setting[:freq]
                 for (cf_str, CF) in CFs]
-            push!(rows, (task = name, results...))
+            best = sortperm(results, by = x -> x[2])[1]
+            push!(rows, (Task = name, results..., Best = results[best][1]))
             next!(prog)
         end
-        sep = " "^displaysize(stdout)[2]
         lock(iolock) do
-            println("\r$sep")
-            println("Setting: $setname")
-            DataFrame(rows) |> display
+            display_table(rows, setname)
             next!(prog)
+            tables[setname] = rows
         end
     end
     finish!(prog)
+    for (setname, _) in setting_args
+        display_table(tables[setname], setname)
+    end
 end
 
 function show_benchmark(bench_name::String, setting_name::String, cf_name::Symbol)

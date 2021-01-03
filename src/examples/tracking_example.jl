@@ -56,13 +56,13 @@ function tracking_example(;freq = 100.0, time_end = 20.0, noise_level=0.0, plot_
     z_dy = StaticObsDynamics()
 
     delay_model = DelayModel(obs = 3, act = 3, com = 1, ΔT = 5)
-    ΔT = delay_model.ΔT
+    @unpack ΔT, Ta = short_delay_names(delay_model)
     H = 20
 
     # reference trajectory to track
     x_ref0 = X(x = 0, y = -0.5, θ = 0.0)
     u_ref0 = U(v̂ = 0.5, ψ̂ = 0.1pi)
-    circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1 + H * ΔT + delay_model.total)
+    circ_traj = circular_traj(dy, x_ref0, u_ref0, t_end + 1 + H * ΔT + Ta)
     traj_f = FuncT(Tuple{ℕ,𝕋}, CarX{ℝ}) do (id, t)
         t = max(1, t) 
         circ_traj[t]

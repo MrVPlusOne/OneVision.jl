@@ -15,12 +15,15 @@ end
 NaiveCF(X, Z, N, central::CentralControl{U,S}, msg_queue_len, ΔT) where {U,S} = 
     NaiveCF{X,Z,U,S}(N, central, msg_queue_len, ΔT)
 
-mutable struct NaiveController{X,Z,U,S} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
+struct NaiveController{X,Z,U,S} <: Controller{X,Z,U,NaiveMsg{X,Z},Nothing}
     self::ℕ
     cf::NaiveCF{X,Z,U,S}
     "Central control state."
-    s_c::S
-    t::𝕋
+    s_c::Ref{S}
+    "Current action"
+    u::Ref{U}
+    t::Ref{𝕋}
+    t0::𝕋
 end
 
 # NaiveCF has nothing to log
@@ -36,10 +39,12 @@ function OneVision.control!(
     @unpack ΔT, central = ctrl.cf
     xs = [m.x for m in msgs]
     zs = [m.z for m in msgs]
-    ctrl.t += ΔT
-    u = control_one(central, ctrl.s_c, xs, zs, ctrl.t, ctrl.self)
+    if mod(ctrl.t[] - ctrl.t0, ΔT) == 0
+        ctrl.u[] = control_one(central, ctrl.s_c[], xs, zs, ctrl.t[], ctrl.self)
+    end
     msgs′ = fill(NaiveMsg(x, z), length(msgs))
-    u, msgs′
+    ctrl.t[] += 1
+    ctrl.u[], msgs′
 end
 
 function OneVision.make_controllers(
@@ -50,7 +55,8 @@ function OneVision.make_controllers(
     central = framework.central
     s_c = init_state(central, init_t)
     ctrls = ntuple(framework.num_agents) do i
-        NaiveController{X,Z,U,S}(i, framework, s_c, init_t - 1)
+        u = init_status[i][3]
+        NaiveController(i, framework, Ref(s_c), Ref(u), Ref(init_t), init_t)
     end
     init_msg() = begin
         receives = [NaiveMsg(x, z) for (x, z, u) in init_status]

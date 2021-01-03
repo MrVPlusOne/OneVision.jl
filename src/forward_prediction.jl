@@ -1,6 +1,6 @@
 using StaticArrays
 
-export ForwardPredictProblem, forward_predict!, self_estimate
+export ForwardPredictProblem, forward_predict!, self_estimate, self_z_estimate
 
 struct ForwardPredictProblem{N,Hf,X,Z,U,Dy,Ctrl}
     world_dynamics::Dy
@@ -99,4 +99,19 @@ function self_estimate(
         x_history[t] = Timed(τ + t, x)
     end
     x_history
+end
+
+function self_z_estimate(
+    z_dynamics::ObsDynamics,
+    z0::Timed{Z},
+    x_history,
+)::Vector{Timed{Z}} where {Z}
+    z, τ = z0.value, z0.time
+    z_history = Vector{Timed{Z}}(undef, length(x_history))
+    for (t, x) in enumerate(x_history)
+        @assert x isa Timed
+        z = obs_forward(z_dynamics, x[τ + t - 1], z, τ + t - 1)
+        z_history[t] = Timed(τ + t, z)
+    end
+    z_history
 end

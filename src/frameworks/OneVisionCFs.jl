@@ -64,15 +64,17 @@ end
 @kwdef mutable struct OvController{N,X,Z,U,S,H,ΔT,Hf,WDy,Ctrl} <: Controller{X,Z,U,OvMsg{X,Z},OvLog{X,Z,U}}
     id::ℕ
     cf::OvCF{N,X,Z,U,S,H}
+    τ0::𝕋
     τ::𝕋                                # -- At the start of each controll step --
+    u_last::U                           # t = τ+Tu-1
     u_history::TimedQueue{U}            # t ∈ [τ-Tx,τ+Tu-1]
     "predicted x from last control step, used to measure disturbance."
     pred_x::Timed{X}                    # t = τ-Tx
     "self disturbance history"
-    self_δx::TimedQueue{X}              # t ∈ [τ-Tx-Tc-ΔT-1, τ-Tx-1-ΔT]
-    self_z::TimedQueue{Optional{Z}}     # t ∈ [τ-Tx-Tc-ΔT, τ-Tx-ΔT]
+    self_δx::TimedQueue{X}              # t ∈ [τ-Tx-Tc-ΔT-1, τ-Tx-2]
+    self_z::TimedQueue{Optional{Z}}     # t ∈ [τ-Tx-Tc-ΔT, τ-Tx-1]
     ideal_xz::Timed{Each{Tuple{X,Z}}}   # t = τ-Tx-Tc-ΔT
-    ideal_s::Timed{S}                   # t = τ-Tx-Tc-ΔT
+    ideal_s::S                   # t = τ-Tx-Tc-ΔT
     fp_prob::ForwardPredictProblem{N,Hf,X,Z,U,WDy,Ctrl}
     plan_prob::TrajPlanningProblem{H,ΔT,X,U}
     logs::Dict{𝕋,OvLog{X,Z,U}}
@@ -91,18 +93,18 @@ function OneVision.make_controllers(
     τ::𝕋,
 )::Tuple where {N,X,Z,U,S,H}
     dm = cf.delay_model
-    @unpack Tx, Tu, Tc, ΔT = short_delay_names(dm)
+    @unpack Tx, Tu, Tc, Ta, ΔT = short_delay_names(dm)
     function mk_controller(id)
         x0, z0, u0 = init_status[id]
         u_history = TimedQueue(u0, τ-Tx, τ+Tu-1)
         x_dy = cf.world_model.dynamics[id]
         pred_x = Timed(τ-Tx, x0)
-        self_δx = TimedQueue(zero(X), τ-Tx-Tc-ΔT-1, τ-Tx-ΔT-1)
-        self_z = TimedQueue(missing, τ-Tx-Tc-ΔT, τ-Tx-ΔT, eltype=Optional{Z})
+        self_δx = TimedQueue(zero(X), τ-Tx-Tc-ΔT-1, τ-Tx-2)
+        self_z = TimedQueue(missing, τ-Tx-Tc-ΔT, τ-Tx-1, eltype=Optional{Z})
         ideal_xz = Timed(τ-Tx-Tc-ΔT, [(x, z) for (x, z, _) in init_status])
-        ideal_s = Timed(τ-Tx-Tc-ΔT, init_state(cf.central, τ))
+        ideal_s = init_state(cf.central, τ)
 
-        fp_prob = let Hf = H * ΔT + dm.total + ΔT
+        fp_prob = let Hf = H * ΔT + Ta + ΔT
             ForwardPredictProblem(cf.world_model, cf.central; X, Z, Hf)
         end
         x_weights = cf.x_weights[id]
@@ -112,7 +114,7 @@ function OneVision.make_controllers(
         )
 
         OvController(;
-            id, cf, τ, u_history, pred_x, 
+            id, cf, τ0 = τ, τ, u_last = u0, u_history, pred_x, 
             self_δx, self_z, ideal_xz, ideal_s, 
             fp_prob, plan_prob, logs = Dict{𝕋,OvLog{X,Z,U}}(),
         )
@@ -121,9 +123,7 @@ function OneVision.make_controllers(
     function mk_q(_)
         receives = [[OvMsg(Timed(t-1, zero(x)), Timed{Optional{Z}}(t, missing)) 
                     for (x, z, u) in init_status
-                    ] for t in range(τ-Tc-Tx, step = ΔT, 
-                                    length = msg_queue_length(dm))]
-        @show range(τ-Tc-Tx, step = ΔT, length = msg_queue_length(dm))
+                    ] for t in range(τ-Tc-Tx, length = msg_queue_length(dm))]
         FixedQueue(receives)
     end
 
@@ -138,18 +138,13 @@ function OneVision.control!(
     z0::Z,
     msgs::Each{OvMsg{X,Z}},
 )::Tuple{U,Each{OvMsg{X,Z}}} where {N,X,Z,U,S,H,ΔT}
-    @unpack id, τ = π
+    @unpack id, τ, τ0 = π
     world = π.cf.world_model
-    dm = π.cf.delay_model
     fp_prob = π.fp_prob
-    @unpack Tx, Tu, Tc, Ta = short_delay_names(dm)
+    @unpack Tx, Tu, Tc, Ta = short_delay_names(π.cf.delay_model)
     z = Timed(τ-Tx, z0)
 
     δx = x - π.pred_x[τ-Tx] |> attime(τ-Tx-1)   # δx: t = τ-Tx-1
-    for t in τ-Tx-ΔT+1:τ-Tx-1
-        pushpop!(π.self_δx, Timed(t-1, zero(x)))
-        pushpop!(π.self_z, Timed(t, missing))
-    end  
     pushpop!(π.self_δx, δx)     # π.self_δx: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
     pushpop!(π.self_z, z)       # π.self_z: t ∈ [τ-Tx-Tc, τ-Tx]
     new_msg = OvMsg(δx, to_optional(z))
@@ -161,52 +156,53 @@ function OneVision.control!(
         π.u_history
     )[end]  # x_self: t = τ+Tu
 
+    "the time offset within the ΔT period"
+    t = mod1(τ - τ0, ΔT)
+
     # forward predict the ideal fleet trajectory from the state at t-Tx-Tc-1
-    ptime = τ-Tx-Tc-ΔT  # the starting time of forward_predict!
     for j in 1:N
         if j == id continue end
-        for t in 1:ΔT - 1
-            fp_prob.δx[t, j] = zero(X)
-            fp_prob.z_obs[t, j] = missing
-        end
         @unpack δx, z = msgs[j]
-        fp_prob.δx[ΔT, j] = δx[ptime-1]
-        fp_prob.z_obs[ΔT, j] = z[ptime]
+        fp_prob.δx[t, j] = δx[τ-Tx-Tc-1]
+        fp_prob.z_obs[t, j] = z[τ-Tx-Tc]
     end
-    fp_prob.δx[1:length(π.self_δx),id] = collect(x.value for x in π.self_δx.queue)
-    fp_prob.z_obs[1:length(π.self_z),id] = collect(x.value for x in π.self_z.queue)
 
-    # x̃[t in τ-Tx-Tc-ΔT+1: τ+Tu+HΔT], ũ[t in τ-Tx-Tc-ΔT: τ+Tu+HΔT-1]
-    @asserteq π.self_δx[1].time ptime
-    ũ, x̃, z̃ = forward_predict!(
-        fp_prob, π.ideal_xz[ptime], π.ideal_s[ptime], ptime, ΔT)
-    π.ideal_xz = [(x̃[ΔT,j], z̃[ΔT,j]) for j in 1:N] |> attime(ptime+ΔT)  # π.ideal_xz: t = τ-Tx-Tc
+    if t == ΔT
+        fp_prob.δx[1:length(π.self_δx),id] = collect(x.value for x in π.self_δx.queue)
+        fp_prob.z_obs[1:length(π.self_z),id] = collect(x.value for x in π.self_z.queue)
 
-    # local planning using path following
-    
-    # u_plan: [τ+Tu:τ+Tu+HΔT-1], x_plan: [τ+Tu+1:τ+Tu+HΔT]
-    u_plan, loss = let 
-        n_x, n_u = length(X), length(U)
-        x_path = SVector{H * ΔT}(x̃[1 + ΔT + Ta : end, id])  # [τ+Tu+1:τ+Tu+HΔT]
-        u_path = SVector{H * ΔT}(ũ[1 + ΔT + Ta : end, id])  # [τ+Tu:τ+Tu+HΔT-1]
-        plan_trajectory(π.plan_prob, x_self[τ+Tu], x_path, u_path, τ+Tu)
-    end
-    
-    u = Timed(τ+Tu, u_plan[1])
+        # x̃[t in τ-Tx-Tc-ΔT+1: τ+Tu+HΔT], ũ[t in τ-Tx-Tc-ΔT: τ+Tu+HΔT-1]
+        ptime = τ-Tx-Tc-ΔT  # the starting time of forward_predict!
+        @asserteq π.self_δx[1].time ptime
+        ũ, x̃, z̃ = forward_predict!(
+            fp_prob, π.ideal_xz[ptime], π.ideal_s, ptime, ΔT)
+        π.ideal_xz = [(x̃[ΔT,j], z̃[ΔT,j]) for j in 1:N] |> attime(ptime+ΔT)  # π.ideal_xz: t = τ-Tx-Tc
 
-    π.pred_x = let x1 = x, z1 = z[τ-Tx]
-        x_dy = world.dynamics[id]
-        for t = τ-Tx : (τ - Tx + ΔT - 1)
-            u_old = pushpop!(π.u_history, u)[τ-Tx]  # u_old at t = τ-Tx
-            x1 = sys_forward(x_dy, x1, u_old, t)
+        # local planning using path following
+        
+        # u_plan: [τ+Tu:τ+Tu+HΔT-1], x_plan: [τ+Tu+1:τ+Tu+HΔT]
+        u_plan, loss = let 
+            n_x, n_u = length(X), length(U)
+            x_path = SVector{H * ΔT}(x̃[1 + ΔT + Ta : end, id])  # [τ+Tu+1:τ+Tu+HΔT]
+            u_path = SVector{H * ΔT}(ũ[1 + ΔT + Ta : end, id])  # [τ+Tu:τ+Tu+HΔT-1]
+            plan_trajectory(π.plan_prob, x_self[τ+Tu], x_path, u_path, τ+Tu)
         end
-        Timed(x1, τ-Tx+ΔT)
+        
+        π.u_last = u_plan[1]
+    end
+    u = π.u_last
+
+    π.pred_x = let
+        x_dy = world.dynamics[id]
+        u_old = pushpop!(π.u_history, Timed(τ+Tu, u))[τ-Tx]  # u_old at t = τ-Tx
+        x1 = sys_forward(x_dy, x, u_old, τ-Tx)
+        Timed(τ-Tx+1, x1)
     end
 
     if should_log 
-        π.logs[π.τ - dm.obs - dm.com] = OvLog(to_array.((ũ, x̃, z̃))..., δx, z)
+        π.logs[τ - Tx - Tc] = OvLog(to_array.((ũ, x̃, z̃))..., δx, z)
     end
 
-    π.τ += ΔT
-    u[τ+Tu], fill(new_msg, N)
+    π.τ += 1
+    u, fill(new_msg, N)
 end

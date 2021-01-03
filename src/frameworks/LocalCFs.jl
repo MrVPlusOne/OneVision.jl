@@ -19,18 +19,20 @@ function LocalCF(
     LocalCF{N,X,Z,U,S,XDy,ZDy}(central, world_model, delay_model)
 end
 
-mutable struct LocalController{id,N,X,Z,U,S,XDy,ZDy} <: Controller{X,Z,U,LocalCFMsg,Nothing}
+struct LocalController{id,N,X,Z,U,S,XDy,ZDy} <: Controller{X,Z,U,LocalCFMsg,Nothing}
     cf::LocalCF{N,X,Z,U,S,XDy,ZDy}
     "Central control state."
-    s_c::S
-    τ::𝕋
-    u_history::FixedQueue{U}            # t ∈ [τ-Tx,τ+Tu-1]
+    s_c::Ref{S}
+    τ::Ref{𝕋}
+    u::Ref{U}                           # t = τ-1
+    u_history::TimedQueue{U}            # t ∈ [τ-Tx,τ+Tu-1]
+    t0::𝕋
 end
 
 function LocalController(
-    id,cf::LocalCF{N,X,Z,U,S,XDy,ZDy}, s_c, t, u_history
+    id,cf::LocalCF{N,X,Z,U,S,XDy,ZDy}, s_c, t, u0, u_history
 ) where {N,X,Z,U,S,XDy,ZDy}
-    LocalController{id,N,X,Z,U,S,XDy,ZDy}(cf, s_c, t, u_history)
+    LocalController{id,N,X,Z,U,S,XDy,ZDy}(cf, Ref(s_c), Ref(t), Ref(u0), u_history, t)
 end
 
 function OneVision.control!(
@@ -40,28 +42,32 @@ function OneVision.control!(
     msgs::Each{LocalCFMsg{X,Z}},
 )::Tuple{U,Each{LocalCFMsg{X,Z}}} where {id,N,X,Z,U}
     @unpack central, world_model, delay_model = ctrl.cf
-    Tx = delay_model.obs
-    Tu = delay_model.act
-    ΔT = delay_model.ΔT
+    @unpack Tx, Tu, ΔT = short_delay_names(delay_model)
+    τ = ctrl.τ[]
 
-    ctrl.τ += ΔT
-
-    x_self = isempty(ctrl.u_history) ? x : self_estimate(
+    x_history = self_estimate(
         world_model.dynamics[id],
-        (x, ctrl.τ - Tx),
-        ctrl.u_history
-    )[end]  # x_self: t = τ+Tu
+        Timed(τ - Tx, x),
+        ctrl.u_history,
+    )
+    z_history = self_z_estimate(
+        world_model.obs_dynamics[id], 
+        Timed(τ - Tx, z),
+        [Timed(τ - Tx, x); x_history[1:end-1]],
+    )
 
-    msg = LocalCFMsg(x_self, z)
-    msgs[id] = msg
-    xs = [m.x for m in msgs]
-    zs = [m.z for m in msgs]
-    u = control_one(central, ctrl.s_c, xs, zs, ctrl.τ + Tu, id)
-    for _ in 1:ΔT
-        pushpop!(ctrl.u_history, u)
+    x_self, z_self = isempty(ctrl.u_history) ? (x, z) : (x_history[end], z_history[end])
+    msg = LocalCFMsg(x_self[τ+Tu], z_self[τ+Tu])
+    if mod(τ - ctrl.t0, ΔT) == 0
+        msgs[id] = msg
+        xs = [m.x for m in msgs]
+        zs = [m.z for m in msgs]
+        ctrl.u[] = control_one(central, ctrl.s_c[], xs, zs, τ + Tu, id)
     end
     msgs′ = fill(msg, N)
-    u, msgs′
+    pushpop!(ctrl.u_history, Timed(τ + Tu, ctrl.u[]))
+    ctrl.τ[] += 1
+    ctrl.u[], msgs′
 end
 
 function OneVision.make_controllers(
@@ -69,18 +75,17 @@ function OneVision.make_controllers(
     init_status::Each{Tuple{X,Z,U}},
     t0::𝕋,
 )::Tuple where {N,X,Z,U,S}
-    dm = cf.delay_model
-    ΔT = dm.ΔT
+    @unpack Tx, Tu, ΔT = short_delay_names(cf.delay_model)
     function mk_controller(id)
         x0, z0, u0 = init_status[id]
-        u_history = constant_queue(u0, dm.obs + dm.act)
+        u_history = TimedQueue(u0, t0-Tx, t0+Tu-1)
         ideal_s = init_state(cf.central, t0)
 
-        LocalController(id, cf, ideal_s, t0-1, u_history)
+        LocalController(id, cf, ideal_s, t0, u0, u_history)
     end
     function mk_q(_)
         receives = [LocalCFMsg(x,z) for (x, z, u) in init_status]
-        constant_queue(receives, msg_queue_length(dm))
+        constant_queue(receives, msg_queue_length(cf.delay_model))
     end
 
     ctrls = ntuple(mk_controller, N)

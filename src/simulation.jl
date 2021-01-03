@@ -93,12 +93,8 @@ function simulate(
     zs_observer = (zs, t) -> zs,
 ) where {X,Z,U,Msg,Log,N}
     @assert tf ≥ t0
-
-    ΔT = delay_model.ΔT
-    is_control_time(t) = mod(t - t0, ΔT) == 0
-    is_obs_time(t) = mod(t + delay_model.obs - t0, ΔT) == 0
-    is_act_time(t) = mod(t - delay_model.act - t0, ΔT) == 0
-    is_msg_time(t) = mod(t - delay_model.com - t0, ΔT) == 0
+    @unpack Tx, Tu, Tc = short_delay_names(delay_model)
+    @assert Tc > 0
 
     if loss_model !== nothing
         # the *ideal* state and observation at the current time step
@@ -116,47 +112,36 @@ function simulate(
 
     (controllers, msg_qs) = make_controllers(framework, init_status, t0)
     # the head of these queues corresponding to values that are currently taking effect
-    msg_qs = shorten_queue.(msg_qs, delay_model.com ÷ ΔT + 1)
-    state_qs = SVector{N}(constant_queue.(xs, delay_model.obs ÷ ΔT + 1))
-    obs_qs = SVector{N}(constant_queue.(zs, delay_model.obs ÷ ΔT + 1))
-    act_qs = SVector{N}(constant_queue.(us, delay_model.act ÷ ΔT + 1))
+    msg_qs = shorten_queue.(msg_qs, Tc)
+    state_qs = SVector{N}(constant_queue.(xs, Tx))
+    obs_qs = SVector{N}(constant_queue.(zs, Tx))
+    act_qs = SVector{N}(constant_queue.(us, Tu))
 
     # we store the newest messages/actions into these caches and wait until 
     # the next control/actuation step to push them into the queues to take effect.
     msg_cache = SizedMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
     act_cache = MVector{N, U}(first.(act_qs))
     for t in t0:tf
-        if is_obs_time(t)
-            # we don't need cahces here since they will only be used in the next
-            # control step anyway.
-            pushpop!.(state_qs, xs_observer(xs, t))
-            pushpop!.(obs_qs, zs_observer(zs, t))
+        xs_read = pushpop!.(state_qs, xs_observer(xs, t))
+        zs_read = pushpop!.(obs_qs, zs_observer(zs, t))
+        # run controllers
+        for i in SOneTo(N)
+            x, z = xs_read[i], zs_read[i]
+            ms = first(msg_qs[i])
+            u, ms′ = control!(controllers[i], x, z, ms)
+            u = limit_control(world_dynamics.dynamics[i], u, x, t)
+            msg_cache[i, :] = ms′
+            act_cache[i] = u
         end
-        if is_msg_time(t)
-            for i in SOneTo(N)
-                pushpop!(msg_qs[i], convert(Vector{Msg}, msg_cache[:, i]))
-            end
-        end
-        if is_control_time(t)
-            for i in SOneTo(N)
-                x, z, ms = first.((state_qs[i], obs_qs[i], msg_qs[i]))
-                u, ms′ = control!(controllers[i], x, z, ms)
-                u = limit_control(world_dynamics.dynamics[i], u, x, t)
-                msg_cache[i, :] = ms′
-                act_cache[i] = u
-            end
-        end
-        if is_act_time(t)
-            pushpop!.(act_qs, act_cache)
-            us .= first.(act_qs)
+        us .= pushpop!.(act_qs, act_cache)
+        for i in SOneTo(N)
+            pushpop!(msg_qs[i], convert(Vector{Msg}, msg_cache[:, i]))
         end
 
         # record loss
         if loss_model !== nothing
-            if is_act_time(t)
-                us_idl .= control_all(central, s_c, xs_idl, zs, t, SOneTo(N))
-                us_idl .= limit_control.(modeled_dynamics.dynamics, us_idl, xs_idl, t)
-            end
+            us_idl .= control_all(central, s_c, xs_idl, zs, t, SOneTo(N))
+            us_idl .= limit_control.(modeled_dynamics.dynamics, us_idl, xs_idl, t)
             for i in 1:N
                 x_loss = sum((xs[i] .- xs_idl[i]).^2 .* x_weights[i])
                 u_loss = sum((collect(us[i]) .- us_idl[i]).^2 .* u_weights[i])
