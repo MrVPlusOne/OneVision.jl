@@ -161,8 +161,8 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     result, (logs, loss) = simulate(
         world, delays_actual, framework, init, (comps, record_f), 1:t_end
         ; xs_observer, loss_model)
-    # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
+        visualize(result; delta_t = 1 / freq, loss) |> display
         plot_formation(result, freq, central, 
             t -> form_from_id(external_formation(missing, t))) |> display
     end

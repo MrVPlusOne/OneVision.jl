@@ -25,6 +25,15 @@ macro require_impl()
     :(error("Abstract method requires implementation."))
 end
 
+macro asserteq(left, right)
+    ex = string(:($left == $right))
+    quote       
+        @assert(
+            (l = $(esc(left))) == (r = $(esc(right))),
+            "$l != $r in assertion: $($ex)")
+    end
+end
+
 """
 A typed function with annotated input and output type. 
 If `a` has type `FuncT{X,Y,F}`, then `a(x)` is equivalent to `a.f(x::X)::Y`.
@@ -176,7 +185,7 @@ Base.getindex(q::FixedQueue, range::UnitRange) =
     (q.vec[mod1(q.head + i-1, q.len)] for i in range)
 
 # push x to the end of the queue(stack?)
-function pushpop!(q::FixedQueue{T}, x::T)::T where T
+function pushpop!(q::FixedQueue{T}, x)::T where T
     (q.len==0) && return x
     v = q.vec[q.head]
     q.vec[q.head] = x

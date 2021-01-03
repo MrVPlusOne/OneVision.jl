@@ -1,6 +1,6 @@
 export simulate, TrajectoryData, visualize
 
-# using Plots: Plot, plot
+import Plots
 using Makie
 using AbstractPlotting.MakieLayout
 using StaticArrays
@@ -25,13 +25,13 @@ function Base.getindex(data::TrajectoryData, comp::String)
     data.values[:,:,(c_id::Int)]
 end
 
-
-
-"A generic result visualization function that draws multiple line plots, 
-one for each component of the state vector.\n"
+"""
+A generic result visualization function that draws multiple line plots, 
+one for each component of the state vector.
+"""
 function visualize(
     result::TrajectoryData; delta_t = nothing, loss = nothing,
-)::Scene
+)::Plots.Plot
     if delta_t === nothing
         times = result.times
         xlabel = "time step"
@@ -40,40 +40,29 @@ function visualize(
         xlabel = "time (s)"
     end
     ## currently assume all agents have the same type of states and observations
-    labels = reshape(["agent $i" for i in 1:size(result.values, 2)], (1, :))
+    N = size(result.values, 2)
+    labels = reshape(["agent $i" for i in 1:N], (1, :))
     n = length(result.components)
-    scene, layout = layoutscene(resolution = (1200, 500 * n))
-    axes = map(enumerate(result.components)) do (c_id, comp)
-        ax = LAxis(scene; title = comp, xlabel)
+    colors = [get(ColorSchemes.rainbow, j / N) for j in 1:N]
+    ps = map(enumerate(result.components)) do (c_id, comp)
         ys = result.values[:,:,c_id]
-        N = size(ys, 2)
-        for j in 1:N
-            lines!(ax, times, ys[:,j], linewidth=2,
-                color = get(ColorSchemes.rainbow, j / N))
-        end
-        layout[c_id, 1] = ax
+        Plots.plot(times, ys, label=labels, title=comp)
     end
 
     if loss !== nothing
         let ts = collect(AxisArrays.axes(loss)[1])
             (delta_t !== nothing) && (ts = ts .* delta_t)
-            for (label, name) in ((:u, "Action"), (:x, "State"))
+            ps2 = map([(:u, "Action"), (:x, "State")]) do (label, name)
                 ys = collect(loss[comp=label])
-                ax = LAxis(scene; title = "$name Loss", xlabel)
-                N = size(ys, 2)
-                for j in 1:N
-                    lines!(ax, ts, ys[:,j], linewidth=2,
-                    color = get(ColorSchemes.rainbow, j / N))
-                end
-                layout[end+1, 1] = ax
-                push!(axes, ax)
+                Plots.plot(ts, ys, label=name, title=name)
             end
+            append!(ps, ps2)
         end
     end
-    linkxaxes!(axes...)
-    scene
+    
+    Plots.plotlyjs()
+    Plots.plot(ps..., layout=(length(ps), 1), size=(500, length(ps) * 200), legend=false)
 end
-
 
 function shorten_queue(q, len)
     @assert(len ≤ length(q), 

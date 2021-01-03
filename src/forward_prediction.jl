@@ -86,3 +86,17 @@ function self_estimate(
     end
     x_history
 end
+
+function self_estimate(
+    self_dynamics::SysDynamics,
+    s0::Timed{X},
+    u_history::TimedQueue,
+)::Vector{Timed{X}} where {X}
+    x, τ = s0.value, s0.time
+    x_history = Vector{Timed{X}}(undef, length(u_history))
+    for (t, u) in enumerate(u_history.queue)
+        x = sys_forward(self_dynamics, x, u[τ + t - 1], τ + t - 1)
+        x_history[t] = Timed(τ + t, x)
+    end
+    x_history
+end

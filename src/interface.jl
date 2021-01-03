@@ -2,10 +2,11 @@ export ℝ, ℕ, 𝕋, Each, round_ceil, round_floor
 export SysDynamics, SysDynamicsLinear, SysDynamicsLTI, discretize
 export ObsDynamics, StaticObsDynamics
 export sys_forward, limit_control, sys_A, sys_B, sys_w, obs_forward
-export DelayModel, WorldDynamics, RegretLossModel, msg_queue_length
+export DelayModel, WorldDynamics, RegretLossModel, msg_queue_length, short_delay_names
 export CentralControl, CentralControlStateless, init_state, control_one, control_all
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
+export Timed, attime, TimedQueue, pushpop!
 
 const ℝ = Float64  # use 64-bit precision for real numbers
 const ℕ = Int64
@@ -120,6 +121,9 @@ struct DelayModel
     ΔT::𝕋
 end
 
+@inline short_delay_names(dm::DelayModel) = 
+    (Tx = dm.obs, Tu = dm.act, Tc = dm.com, Ta = dm.total, ΔT = dm.ΔT)
+
 DelayModel(;obs, act, com, ΔT = 1) = begin 
     @assert com ≥ 1 "Communication delay should be at least 1, but got: $com."
     @assert obs ≥ 0 && act ≥ 0 && ΔT ≥ 1
@@ -127,7 +131,6 @@ DelayModel(;obs, act, com, ΔT = 1) = begin
 end
 
 msg_queue_length(dm::DelayModel) = dm.com ÷ dm.ΔT + 1
-
 
 
 """
@@ -229,4 +232,47 @@ function make_controllers(
     init_t::𝕋,
 ) where {X,Z,U,Msg}
     @require_impl
+end
+
+struct Timed{X}
+    time::𝕋
+    value::X
+end
+
+Base.getindex(timed::Timed, time::𝕋) = begin
+    @assert timed.time == time "expect time = $time, got: $timed."
+    timed.value
+end
+
+Base.convert(::Type{Timed{Y}}, x::Timed{X}) where {X, Y} =
+    if X == Y
+        x
+    else
+        Timed{Y}(x.time, convert(Y, x.value))
+    end
+
+@inline attime(t::𝕋) = v -> Timed(t, v)
+
+mutable struct TimedQueue{X}
+    in_time::Int
+    queue::FixedQueue{Timed{X}}
+end
+
+"""
+Creates a TimedQueue with all initial elements having the same value.
+"""
+function TimedQueue(value::X, t1::𝕋, t2::𝕋; eltype::Type{E} = X) where {X, E}
+    in_time = t2+1
+    queue = FixedQueue([Timed{E}(t, value) for t in t1:t2])
+    TimedQueue(in_time, queue)
+end
+
+Base.length(q::TimedQueue) = length(q.queue)
+Base.isempty(q::TimedQueue) = isempty(q.queue)
+Base.getindex(q::TimedQueue, t::𝕋) = q.queue[t]
+
+function pushpop!(q::TimedQueue{T}, x::Timed) where T
+    @assert x.time == q.in_time "Queue in_time: $(q.in_time), x = $x"
+    q.in_time += 1
+    pushpop!(q.queue, x)
 end
