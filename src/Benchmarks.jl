@@ -40,6 +40,7 @@ setting_args = [
     "Default" => defaults
     "Noiseless" => @set defaults[:noise] = 0.0
     "Larger Delays" =>  @set defaults[:delays].com *= 4
+    "No Delays" =>  @set defaults[:delays] = DelayModel(;obs = 0, act = 0, com = 1, ΔT = 5)
     "Lower Freq" => 
         let s1 = copy(defaults)
             s1[:freq] /= 5
@@ -75,6 +76,7 @@ function run_benchmarks()
         end
         lock(iolock) do
             display_table(rows, setname)
+            flush(stdout)
             next!(prog)
             tables[setname] = rows
         end

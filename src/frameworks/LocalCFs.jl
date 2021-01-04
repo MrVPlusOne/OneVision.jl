@@ -47,14 +47,14 @@ function OneVision.control!(
     @unpack Tx, Tu, Tc, ΔT = short_delay_names(delay_model)
     x_dy, z_dy = world_model.dynamics[id], world_model.obs_dynamics[id]
     τ = ctrl.τ[]
+    xt, zt = Timed.(τ-Tx, (x,z))
 
     push_iter(head, tail) = ((i == 0 ? head : tail[i]) for i in 0:length(tail)-1)
 
-    x_history = self_estimate(x_dy,Timed(τ - Tx, x),ctrl.u_history.queue)
-    z_history = 
-        self_z_estimate(z_dy, Timed(τ - Tx, z), push_iter(Timed(τ - Tx, x), x_history))
+    x_history = self_estimate(x_dy,xt,ctrl.u_history.queue)
+    z_history = self_z_estimate(z_dy, zt, push_iter(xt, x_history))
 
-    x_self, z_self = isempty(ctrl.u_history) ? (x, z) : (x_history[end], z_history[end])
+    x_self, z_self = isempty(ctrl.u_history) ? (xt, zt) : (x_history[end], z_history[end])
     msg = LocalCFMsg(x_self[τ+Tu], z_self[τ+Tu])
     if mod(τ - ctrl.t0, ΔT) == 0
         msgs[id] = msg
@@ -89,7 +89,7 @@ function OneVision.make_controllers(
         LocalController(id, cf, ideal_s, t0, u0, u_history)
     end
     function mk_q(_)
-        receives = [LocalCFMsg(x,z) for (x, z, u) in init_status]
+        receives = [LocalCFMsg(x, z) for (x, z, u) in init_status]
         constant_queue(receives, msg_queue_length(cf.delay_model))
     end
 

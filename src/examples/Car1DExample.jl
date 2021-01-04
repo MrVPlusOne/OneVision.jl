@@ -143,8 +143,8 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     central = LeaderFollowerControl(
         warm_up_time = delays.act, 
         bang_bang_tol = use_bang_bang ? 1.0 : Inf)
-    x_weights = SVector{N}(fill(CarX(1.0, 1.0), N))
-    u_weights = SVector{N}(fill(CarU(1.0), N))
+    x_weights = SVector{N}(fill(CarX(10.0, 1.0), N))
+    u_weights = SVector{N}(fill(CarU(0.1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
     framework = mk_cf(
         CF, world_model, central, delays, loss_model; 

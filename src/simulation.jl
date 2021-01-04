@@ -120,7 +120,7 @@ function simulate(
     # we store the newest messages/actions into these caches and wait until 
     # the next control/actuation step to push them into the queues to take effect.
     msg_cache = SizedMatrix{N,N,Msg}(hcat(first.(msg_qs)...)) # [sender, receiver]
-    act_cache = MVector{N, U}(first.(act_qs))
+    act_cache = MVector{N, U}(us)
     for t in t0:tf
         xs_read = pushpop!.(state_qs, xs_observer(xs, t))
         zs_read = pushpop!.(obs_qs, zs_observer(zs, t))

@@ -292,6 +292,7 @@ function live_demo(CF::CFName = onevision_cf)
         sleep(max(0, to_sleep))
         last_time = current_time
     end
+    sleep(1) # wait for the UI to appear
     simulate(
         world, delays_actual, framework, init, callback, (1, typemax(𝕋)); 
         loss_model, xs_observer)

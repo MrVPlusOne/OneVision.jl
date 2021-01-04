@@ -103,21 +103,24 @@ abstract type TrackingControl end
     kd::ℝ = 0.0
 end
 
-function ref_point(K::RefPointTrackControl, s::CarX)
-    d = K.ref_pos
-    x = s.x + d * cos(s.θ)
-    y = s.y + d * sin(s.θ)
+function ref_point(ref_pos, s::CarX)
+    x = s.x + ref_pos * cos(s.θ)
+    y = s.y + ref_pos * sin(s.θ)
     @SVector[x, y]
 end
 
-function ref_point_v(K::RefPointTrackControl, ŝ::CarX)
-    d = K.ref_pos
-    @unpack v, θ, ψ = ŝ
-    ω = ω_from_v_ψ(v, ψ, K.dy.l)
+ref_point(K::RefPointTrackControl, s::CarX) = ref_point(K.ref_pos, s)
+
+function ref_point_v(ref_pos, car_l, s::CarX)
+    d = ref_pos
+    @unpack v, θ, ψ = s
+    ω = ω_from_v_ψ(v, ψ, car_l)
     v̂_x = v * cos(θ) - sin(θ) * ω * d
     v̂_y = v * sin(θ) + cos(θ) * ω * d
     @SVector[v̂_x, v̂_y]
 end
+
+ref_point_v(K::RefPointTrackControl, s::CarX) = ref_point_v(K.ref_pos, K.dy.l, s)
 
 function track_ref(
     K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}, t
@@ -157,6 +160,8 @@ end
     k3::ℝ
 end
 
+ref_point(::ConfigTrackControl, s::CarX) = ref_point(0.0, s)
+ref_point_v(K::ConfigTrackControl, s::CarX) = ref_point_v(0.0, K.dy.l, s)
 
 """
 Full configuration tracking control for a 2D Car.
@@ -190,7 +195,7 @@ function OneVision.control_one(
     x = xs[id]
     x̂ = ctrl.trajectories((id, t))
     ξ = submap(ξ, Symbol(id))
-    track_ref(ctrl.K, ξ, x̂, x, t)
+    track_ref(ctrl.K, ξ, x̂, x, t)::CarU
 end
 
 # === formation driving example ====
@@ -240,7 +245,7 @@ function repel_force(avoidance::CollisionAvoidance, center, pos)
     repl_rotation * (r / d) * mag
 end
 
-function to_formation_frame(ctrl::FormationControl{RefPointTrackControl}, s_leader)
+function to_formation_frame(ctrl::FormationControl, s_leader)
     K = ctrl.K
     rot = rotation2D(s_leader.θ)
     pos_offset = ref_point(K, s_leader)
@@ -315,8 +320,8 @@ function formation_controller(ctrl::FormationControl{ConfigTrackControl}, ξ, xs
     rot = rotation2D(s_leader.θ - s′.θ)
     offset = get_pos(s_leader) - get_pos(s′)
 
-    function action(id)
-        (id == 1) && return zs[1]
+    function action(id)::CarU
+        (id == 1) && return zs[1].c
 
         s = form[id]
         pos = rot * get_pos(s) + offset
@@ -329,7 +334,7 @@ function formation_controller(ctrl::FormationControl{ConfigTrackControl}, ξ, xs
 end
 
 function OneVision.control_one(ctrl::FormationControl, ξ::SymbolMap, xs, zs, t::𝕋, id::ℕ)
-    formation_controller(ctrl, ξ, xs, zs, t)(id)
+    formation_controller(ctrl, ξ, xs, zs, t)(id)::CarU
 end
 
 function OneVision.control_all(

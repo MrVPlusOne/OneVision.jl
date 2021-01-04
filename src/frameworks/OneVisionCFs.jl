@@ -135,24 +135,25 @@ end
 function OneVision.control!(
     π::OvController{N,X,Z,U,S,H,ΔT},
     x::X,
-    z0::Z,
+    z::Z,
     msgs::Each{OvMsg{X,Z}},
 )::Tuple{U,Each{OvMsg{X,Z}}} where {N,X,Z,U,S,H,ΔT}
     @unpack id, τ, τ0 = π
     world = π.cf.world_model
     fp_prob = π.fp_prob
     @unpack Tx, Tu, Tc, Ta = short_delay_names(π.cf.delay_model)
-    z = Timed(τ-Tx, z0)
+    zt = Timed(τ-Tx, z)
+    xt = Timed(τ-Tx, x)
 
     δx = x - π.pred_x[τ-Tx] |> attime(τ-Tx-1)   # δx: t = τ-Tx-1
     pushpop!(π.self_δx, δx)     # π.self_δx: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
-    pushpop!(π.self_z, z)       # π.self_z: t ∈ [τ-Tx-Tc, τ-Tx]
-    new_msg = OvMsg(δx, to_optional(z))
-    should_log = π.cf.save_log((id, π.τ, x, z.value))
+    pushpop!(π.self_z, zt)       # π.self_z: t ∈ [τ-Tx-Tc, τ-Tx]
+    new_msg = OvMsg(δx, to_optional(zt))
+    should_log = π.cf.save_log((id, π.τ, x, zt.value))
 
-    x_self::Timed{X} = isempty(π.u_history) ? x : self_estimate(
+    x_self::Timed{X} = isempty(π.u_history) ? xt : self_estimate(
         world.dynamics[id],
-        Timed(τ - Tx, x),
+        xt,
         π.u_history.queue
     )[end]  # x_self: t = τ+Tu
 
@@ -200,7 +201,7 @@ function OneVision.control!(
     end
 
     if should_log 
-        π.logs[τ - Tx - Tc] = OvLog(to_array.((ũ, x̃, z̃))..., δx, z)
+        π.logs[τ - Tx - Tc] = OvLog(to_array.((ũ, x̃, z̃))..., δx, zt)
     end
 
     π.τ += 1

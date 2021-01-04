@@ -61,6 +61,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
         delays = default_delays,
         CF::CFName = onevision_cf,
         switch_formation = true,
+        track_config = false,
         plot_result = true,
     )
     X, U = CarX{ℝ}, CarU{ℝ}
@@ -127,9 +128,13 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     formations = [triangle_formation, vertical_formation]
     form_from_id(i) = formations[i]
 
-    RefK = RefPointTrackControl(;
-        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-        kp = 1.0, ki = 0.0, kd = 0.0)
+    RefK = if track_config
+        ConfigTrackControl(dy_model, 1.0, 1.0, 1.0)
+    else
+        RefPointTrackControl(;
+            dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+            kp = 1.0, ki = 0.0, kd = 0.0)
+    end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
@@ -144,8 +149,8 @@ function formation_example(;time_end = 20.0, freq = 100.0,
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
-        u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
+        x_weights = SVector{N}(fill(X(x = 100, y = 100, θ = 1), N))
+        u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 10), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
     framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
