@@ -4,19 +4,21 @@ const LocalCFMsg = NaiveMsg
 
 """
 A controller framework that only performs local delay compensation without 
-considering communication delays.
+the knowledge of other agent's controller.
 """
 struct LocalCF{N,X,Z,U,S,XDy,ZDy} <: ControllerFramework{X,Z,U,NaiveMsg{X,Z},Nothing}
     central::CentralControl{U,S}
     world_model::WorldDynamics{N,XDy,ZDy}
     delay_model::DelayModel
+    "Whether to conpensate communication delay by assuming constant future action."
+    conpensate_comm::Bool
 end
 
 function LocalCF(
     central::CentralControl{U,S}, world_model::WorldDynamics{N,XDy,ZDy}, delay_model; 
-    X, Z
+    X, Z, conpensate_comm
 ) where {N,U,S,XDy,ZDy}
-    LocalCF{N,X,Z,U,S,XDy,ZDy}(central, world_model, delay_model)
+    LocalCF{N,X,Z,U,S,XDy,ZDy}(central, world_model, delay_model, conpensate_comm)
 end
 
 struct LocalController{id,N,X,Z,U,S,XDy,ZDy} <: Controller{X,Z,U,LocalCFMsg,Nothing}
@@ -41,20 +43,16 @@ function OneVision.control!(
     z::Z,
     msgs::Each{LocalCFMsg{X,Z}},
 )::Tuple{U,Each{LocalCFMsg{X,Z}}} where {id,N,X,Z,U}
-    @unpack central, world_model, delay_model = ctrl.cf
-    @unpack Tx, Tu, ΔT = short_delay_names(delay_model)
+    @unpack central, world_model, delay_model, conpensate_comm = ctrl.cf
+    @unpack Tx, Tu, Tc, ΔT = short_delay_names(delay_model)
+    x_dy, z_dy = world_model.dynamics[id], world_model.obs_dynamics[id]
     τ = ctrl.τ[]
 
-    x_history = self_estimate(
-        world_model.dynamics[id],
-        Timed(τ - Tx, x),
-        ctrl.u_history,
-    )
-    z_history = self_z_estimate(
-        world_model.obs_dynamics[id], 
-        Timed(τ - Tx, z),
-        [Timed(τ - Tx, x); x_history[1:end-1]],
-    )
+    push_iter(head, tail) = ((i == 0 ? head : tail[i]) for i in 0:length(tail)-1)
+
+    x_history = self_estimate(x_dy,Timed(τ - Tx, x),ctrl.u_history.queue)
+    z_history = 
+        self_z_estimate(z_dy, Timed(τ - Tx, z), push_iter(Timed(τ - Tx, x), x_history))
 
     x_self, z_self = isempty(ctrl.u_history) ? (x, z) : (x_history[end], z_history[end])
     msg = LocalCFMsg(x_self[τ+Tu], z_self[τ+Tu])
@@ -64,10 +62,17 @@ function OneVision.control!(
         zs = [m.z for m in msgs]
         ctrl.u[] = control_one(central, ctrl.s_c[], xs, zs, τ + Tu, id)
     end
+    u = ctrl.u[]
+    if conpensate_comm
+        x_future = self_estimate(x_dy, x_self, Timed(τ + Tu + t - 1, u) for t in 1:Tc)
+        z_future = self_z_estimate(z_dy,z_self,push_iter(x_self, x_future))
+        t_rec = τ + Tu + Tc
+        msg = LocalCFMsg(x_future[end][t_rec], z_future[end][t_rec])
+    end
     msgs′ = fill(msg, N)
-    pushpop!(ctrl.u_history, Timed(τ + Tu, ctrl.u[]))
+    pushpop!(ctrl.u_history, Timed(τ + Tu, u))
     ctrl.τ[] += 1
-    ctrl.u[], msgs′
+    u, msgs′
 end
 
 function OneVision.make_controllers(

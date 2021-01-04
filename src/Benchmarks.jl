@@ -26,6 +26,7 @@ benchmarks = [
 CFs = [
     :Naive => naive_cf, 
     :Local => local_cf, 
+    :ConstU => const_u_cf,
     :OneVision => onevision_cf,
 ]
 

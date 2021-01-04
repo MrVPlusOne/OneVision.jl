@@ -90,11 +90,12 @@ end
 function self_estimate(
     self_dynamics::SysDynamics,
     s0::Timed{X},
-    u_history::TimedQueue,
+    u_history,
 )::Vector{Timed{X}} where {X}
     x, τ = s0.value, s0.time
     x_history = Vector{Timed{X}}(undef, length(u_history))
-    for (t, u) in enumerate(u_history.queue)
+    for (t, u) in enumerate(u_history)
+        u::Timed
         x = sys_forward(self_dynamics, x, u[τ + t - 1], τ + t - 1)
         x_history[t] = Timed(τ + t, x)
     end
@@ -109,7 +110,7 @@ function self_z_estimate(
     z, τ = z0.value, z0.time
     z_history = Vector{Timed{Z}}(undef, length(x_history))
     for (t, x) in enumerate(x_history)
-        @assert x isa Timed
+        x::Timed
         z = obs_forward(z_dynamics, x[τ + t - 1], z, τ + t - 1)
         z_history[t] = Timed(τ + t, z)
     end

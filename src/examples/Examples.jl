@@ -2,13 +2,13 @@ module Examples
 
 export default_delays, mk_cf
 export Car1DExample, Car2DExamples
-export CFName, naive_cf, local_cf, onevision_cf
+export CFName, naive_cf, local_cf, const_u_cf, onevision_cf
 
 using OneVision
 
-default_delays = DelayModel(obs = 2, act = 4, com = 6, ΔT = 5)
+default_delays = DelayModel(obs = 3, act = 4, com = 6, ΔT = 5)
 
-@enum CFName naive_cf local_cf onevision_cf
+@enum CFName naive_cf local_cf const_u_cf onevision_cf
 
 @inline function mk_cf(
     name, world_model::WorldDynamics{N}, central, delays, 
@@ -17,7 +17,9 @@ default_delays = DelayModel(obs = 2, act = 4, com = 6, ΔT = 5)
     if name == naive_cf
         NaiveCF(X, Z, N, central, msg_queue_length(delays), delays.ΔT)
     elseif name == local_cf
-        LocalCF(central, world_model, delays; X, Z)
+        LocalCF(central, world_model, delays; X, Z, conpensate_comm = false)
+    elseif name == const_u_cf
+        LocalCF(central, world_model, delays; X, Z, conpensate_comm = true)
     elseif name == onevision_cf
         OvCF(loss_model, delays; Z, H)
     else

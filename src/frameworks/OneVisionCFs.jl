@@ -153,7 +153,7 @@ function OneVision.control!(
     x_self::Timed{X} = isempty(π.u_history) ? x : self_estimate(
         world.dynamics[id],
         Timed(τ - Tx, x),
-        π.u_history
+        π.u_history.queue
     )[end]  # x_self: t = τ+Tu
 
     "the time offset within the ΔT period"

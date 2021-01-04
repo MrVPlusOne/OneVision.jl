@@ -189,7 +189,7 @@ function draw_view(ui, freq, init, central, dy_model, form_from_id)
     xs_node, loss_node
 end
 
-function live_demo()
+function live_demo(CF::CFName = onevision_cf)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     ΔT = 5
@@ -270,8 +270,8 @@ function live_demo()
     x_weights = SVector{N}(fill(X(x = 1, y = 1, θ = 1), N))
     u_weights = SVector{N}(fill(U(v̂ = 1, ψ̂ = 1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
-
-    framework = mk_cf(onevision_cf, world_model, central, delays_model, loss_model; X, Z, H)
+    
+    framework = mk_cf(CF, world_model, central, delays_model, loss_model; X, Z, H)
 
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
