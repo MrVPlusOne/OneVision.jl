@@ -30,7 +30,7 @@ let
     sys = car_system(dt)
 
     @testset "Path tracking test" begin
-        x_weights = CarX(5.0, 2.0)
+        x_weights = CarX(5.0, 2.0, 0.0)
         u_weights = CarU(0.1)
 
         prob = TrajPlanningProblem(
@@ -40,9 +40,9 @@ let
             x_weights,
             u_weights,
         )
-        x0 = CarX(-1.0, -1.0)
+        x0 = CarX(-1.0, -1.0, 0.0)
 
-        x_path = SVector{HΔT}(fill(CarX(1.0, 0.0), HΔT))
+        x_path = SVector{HΔT}(fill(CarX(1.0, 0.0, 0.0), HΔT))
         u_path = SVector{HΔT}(fill(CarU(0.0), HΔT))
         t0 = 0
         u, obj = plan_trajectory(prob, x0, x_path, u_path, t0)
@@ -52,7 +52,7 @@ let
         x_data = hcat(to_matrix(x), to_matrix(x_path))
         plot(
             plot(u_times, first.(u); label = "u"),
-            plot(x_times, x_data; label = ["x" "v" "x*" "v*"]),
+            plot(x_times, x_data; label = ["x" "v" "u'" "x*" "v*" "u'*"]),
             layout = (2, 1),
             size = (500, 300 * 3),
         ) |> display
@@ -72,13 +72,13 @@ let
     @testset "Forward prediciton" begin
         N = 2
         world = WorldDynamics(fill((sys, NoObs()), 2))
-        s1 = (CarX(0.0, 0.0), CarZ(0.0, 0.0))
-        s2 = (CarX(2.0, 0.0), CarZ(0.0, 0.0))
+        s1 = (CarX(0.0, 0.0, 0.0), CarZ(false, 0.0))
+        s2 = (CarX(2.0, 0.0, 0.0), CarZ(false, 0.0))
         prob = ForwardPredictProblem(world, RendezvousControl(); 
             X = CarX{ℝ}, Z = CarZ{ℝ}, Hf = HΔT)
         u_traj, x_traj = forward_predict!(prob, [s1,s2], nothing, 0, ΔT)
         plot(
-            plot(1:HΔT, to_matrix(x_traj[:,1]); label = ["x1" "v1"]),
+            plot(1:HΔT, to_matrix(x_traj[:,1]); label = ["x1" "v1" "u1'"]),
             plot(1:HΔT, to_matrix(u_traj[:,1]); label = ["u1"]),
             layout = (2, 1),
             size = (500, 300*2),
@@ -87,11 +87,11 @@ let
     end
 
     @testset "Self estimation" begin
-        s0 = CarX(0.0, 0.0), 0
+        s0 = CarX(0.0, 0.0, 0.0), 0
         times = 1:1000
         u_history = [CarU(sin(t/100)) for t in times]
         xs = self_estimate(sys, s0, u_history)
-        plot(times * dt, to_matrix(xs); label = ["x" "v"]) |> display
+        plot(times * dt, to_matrix(xs); label = ["x" "v" "u'"]) |> display
         @test true
     end
 end # Double integrater let

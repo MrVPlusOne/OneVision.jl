@@ -56,7 +56,8 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
 end
 
 
-function formation_example(;time_end = 20.0, freq = 100.0, 
+function formation_example(;
+        time_end = 20.0, freq = 100.0, 
         noise = 0.005, sensor_noise = noise, 
         delays = default_delays,
         CF::CFName = onevision_cf,
@@ -85,7 +86,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
         (if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
         elseif t ≤ 5 * freq
-            U(v̂ = 1.0, ψ̂ = 8°)
+            U(v̂ = 1.0, ψ̂ = 4°)
         elseif t ≤ 9 * freq
             U(v̂ = 1.0, ψ̂ = 0°)
         elseif t ≤ 15 * freq

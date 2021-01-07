@@ -2,6 +2,7 @@ module Car2DExamples
 
 using OneVision
 using OneVision: ℝ, 𝕋, ℕ, @kwdef, °, @set, @_
+using ..Examples: default_delays
 using OneVision.NumericalIntegration
 using OneVision.SymbolMaps
 using OneVision.Examples

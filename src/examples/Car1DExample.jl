@@ -2,7 +2,7 @@ module Car1DExample
 export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
-using OneVision: ℝ, 𝕋, ℕ, @kwdef
+using OneVision: ℝ, 𝕋, ℕ, @kwdef, @unpack
 using OneVision.Examples
 using Random
 using StaticArrays
@@ -10,27 +10,45 @@ using Plots
 
 import OneVision
 
-struct CarX{R} <: FieldVector{2,R}
+@kwdef struct CarX{R} <: FieldVector{3,R}
     pos::R
     velocity::R
+    "Acceleration from the last time step"
+    acc::R
 end
+
+StaticArrays.similar_type(::Type{CarX{A}}, ::Type{B}) where {A, B} = CarX{B}
 
 struct CarU{R} <: FieldVector{1,R}
     acc::R
 end
-struct CarZ{R} <: FieldVector{2,R}
-    detected::R
+
+StaticArrays.similar_type(::Type{CarU{A}}, ::Type{B}) where {A, B} = CarU{B}
+
+CarU{X}(x::Tuple{X}) where X = CarU(x[1])
+
+struct CarZ{R}
+    detected::Bool
     distance::R
 end
 
+struct CarSystem{Noise} <: SysDynamics
+    dt::ℝ
+    v_noise::Noise
+end
 
-const car_A = @SMatrix [0.0 1.0; 0.0 0.0]
-const car_B = @SMatrix [0.0; 1.0]
 
+function car_system(dt::ℝ, v_noise::Function = _ -> 0.0)
+    CarSystem(dt, v_noise)
+end
 
-function car_system(delta_t::ℝ, noise::Function = _ -> CarX(0.0, 0.0))
-    A′, B′ = discretize(car_A, car_B, delta_t)
-    SysDynamicsLTI(A′, B′, noise)
+function OneVision.sys_forward(dy::CarSystem, x::CarX{R}, u, t::𝕋)::CarX{R} where R
+    @unpack dt, v_noise = dy
+    CarX(
+        pos = x.pos + x.velocity * dt + 0.5 * u.acc * dt^2, 
+        velocity = x.velocity + u.acc * dt + v_noise(t), 
+        acc = u.acc,
+    )
 end
     
 "The wall observation model used for simulation.\n"
@@ -42,13 +60,13 @@ end
 function OneVision.obs_forward(
     dy::WallObsDynamics, x::CarX, z::CarZ{R}, t::𝕋
 )::CarZ{R} where R
-    if Bool(z.detected)
+    if z.detected
         z
     elseif (isnothing(dy.wall_position) 
             || x.pos + dy.detector_range < dy.wall_position)
-        [0.0, 0.0]
+        CarZ(false, 0.0)
     else
-        [1.0, dy.wall_position]
+       CarZ(true, dy.wall_position)
     end
 end
 
@@ -75,7 +93,7 @@ A controller struct - holds all necessary information
 end
 
 OneVision.control_one(
-    lf::LeaderFollowerControl, xs,zs, t::𝕋, id::ℕ
+    lf::LeaderFollowerControl, xs, zs, t::𝕋, id::ℕ
 )::CarU{ℝ} = begin
     tol = lf.bang_bang_tol
     function bang_bang(x̂, x, k, tol)
@@ -89,7 +107,7 @@ OneVision.control_one(
     x, z = xs[id], zs[id]
     if t ≤ lf.warm_up_time
         acc = 0.0
-    elseif Bool(round(z.detected)) && z.distance - x.pos ≤ lf.stop_distance
+    elseif z.detected && z.distance - x.pos ≤ lf.stop_distance
         acc = bang_bang(0.0, x.velocity, lf.k_v, tol)
     elseif id == 1
         # the leader
@@ -97,7 +115,7 @@ OneVision.control_one(
     else
         # a follower
         leader = xs[1]
-        acc = (control_one(lf, xs, zs, t, 1).acc # mimic the leader
+        acc = (leader.acc # mimic the leader
                 + bang_bang(leader.velocity, x.velocity, lf.k_v, Inf)
                 + bang_bang(leader.pos, x.pos, lf.k_x, Inf))
     end
@@ -118,8 +136,8 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     rng = MersenneTwister(seed)
     
     agent_info(id) = begin
-        acc_noise = randn(rng, ℝ, t_end) * noise
-        sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[t]))
+        v_noise = randn(rng, ℝ, t_end) * noise
+        sys_dy = car_system(delta_t, t -> v_noise[t])
         obs_dy = 
             if id == 1 && has_obstacle; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
             else WallObsModel() end
@@ -129,7 +147,7 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     
     N = 2
     world_dynamics = WorldDynamics([agent_info(i) for i in 1:N])
-    init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N)
+    init_states = fill((CarX(0.0, 0.0, 0.0), CarZ(false, 0.0), CarU(0.0)), N)
     ΔT = delays.ΔT
     world_model = WorldDynamics(
         fill((car_system(delta_t), WallObsModel()), N))
@@ -143,7 +161,7 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     central = LeaderFollowerControl(
         warm_up_time = delays.act, 
         bang_bang_tol = use_bang_bang ? 1.0 : Inf)
-    x_weights = SVector{N}(fill(CarX(10.0, 1.0), N))
+    x_weights = SVector{N}(fill(CarX(10.0, 1.0, 0.0), N))
     u_weights = SVector{N}(fill(CarU(0.1), N))
     loss_model = RegretLossModel(central, world_model, x_weights, u_weights)
     framework = mk_cf(
