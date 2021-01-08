@@ -5,12 +5,14 @@ using Reexport
 include("utils.jl")
 include("SymbolMaps.jl")
 include("interface.jl")
+include("ros_interface.jl")
 include("simulation.jl")
 include("forward_prediction.jl")
 include("traj_planning.jl")
 include("frameworks/frameworks.jl")
 include("examples/Examples.jl")
 include("Benchmarks.jl")
+include("ros_sim_runner.jl")
 
 # include("ros_integration.jl")
 

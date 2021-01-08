@@ -187,4 +187,94 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     loss
 end
 
+"""
+WIP
+Placed here for reuse of state/initial var definition
+"""
+function run_ros_example(;time_end = 20.0, freq::ℝ = 20.0, 
+    delays = default_delays,
+    CF::CFName = onevision_cf,
+    noise = 0.0, 
+    has_obstacle = true,
+    use_bang_bang = true,
+    seed = 1, plot_result = true, log_prediction = false)
+
+
+    t_end = 𝕋(ceil(time_end * freq)) # integer value 
+    delta_t = 1 / freq
+    times::Vector{𝕋} = collect(1:t_end) # convert to array
+    idx_to_time(xs) = (xs .- 1) .* delta_t # convert integer index to discrete timestep. -1 is to ensure start with 0
+    rng = MersenneTwister(seed) # rng to generator
+
+    # generate information for each agent
+    agent_info(id) = begin
+        acc_noise = randn(rng, ℝ, t_end) * noise 
+        sys_dy = car_system(delta_t, t -> CarX(0.0, acc_noise[t])) # construct system dynamics
+        obs_dy = 
+            if id == 1 && has_obstacle; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
+            else WallObsModel() end
+        # construct observation dynamics
+        sys_dy, obs_dy
+    end
+
+    N = 2 # number of robot 
+    world_dynamics = WorldDynamics([agent_info(i) for i in 1:N]) # construct world dynamics (state, obs) for each car
+    init_states = fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N) # initialize state for each car
+    ΔT = delays.ΔT # DelayModel 
+    world_model = WorldDynamics(
+        fill((car_system(delta_t), WallObsModel()), N)) # knowledge of the world
+
+    comps = ["pos", "velocity", "acceleration", "obstacle"]
+    function record_f(xs, zs, us)
+        [(x -> x.pos).(xs) (x -> x.velocity).(xs) (u -> u.acc).(us) (z -> z.distance).(zs)]
+    end # used for log purpose
+
+    H = 20
+    central = LeaderFollowerControl(
+        warm_up_time = delays.act, 
+        bang_bang_tol = use_bang_bang ? 1.0 : Inf) # initialize control of the robot
+    x_weights = SVector{N}(fill(CarX(10.0, 1.0), N)) # state weight (hyperparam)
+    u_weights = SVector{N}(fill(CarU(0.1), N)) # actuation weight (hyperparam)
+    loss_model = RegretLossModel(central, world_model, x_weights, u_weights) # regression loss
+    framework = mk_cf(
+        CF, world_model, central, delays, loss_model; 
+        X = CarX{ℝ}, Z = CarZ{ℝ}, H) # construct a controller framework - bundle of information needed for simulation
+
+    result, (logs, loss) = ros_simulate(
+        world_dynamics, 
+        delays,
+        framework,
+        init_states,
+        (comps, record_f),
+        times;
+        loss_model,
+    )
+
+    if log_prediction
+        t0, t1 = (0.0, 11.0)
+        id = 1
+        x_indices = [t for t in result.times if t0 ≤ (t - 1) * delta_t ≤ t1]
+        sorted_log = sort!([x for x in logs[id]], by = x -> x[1])
+        δv_x = idx_to_time((x -> x[1]).(sorted_log))
+        anim = @gif for (t, log) in sorted_log
+            ps = []
+            for (c, label) in enumerate(["δx", "δv"])
+                δv_y = [log.δxz[1][c] for (_, log) in sorted_log]
+                p = plot(idx_to_time(x_indices), 
+                        result.values[x_indices,:,c], label = ["agent 1" "agent 2"])
+                plot!(p, δv_x, δv_y, label = label)
+                t -= 1
+                local ts = idx_to_time(t:t + size(log.x̃, 1) - 1)
+                plot!(p, ts, (x -> x[c]).(log.x̃); label = ["central 1" "central 2"])
+                push!(ps, p)
+            end
+            plot(ps...; layout = (2, 1))
+        end
+        anim |> display
+    end
+    plot_result && display(visualize(result; delta_t, loss))
+
+    loss
+end
+
 end # Car1DExampleLabeled

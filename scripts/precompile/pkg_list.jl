@@ -12,4 +12,5 @@ pkg_list = [
     :Makie,
     :GLMakie,
     :MakieGallery,
+    :JSON,
 ]

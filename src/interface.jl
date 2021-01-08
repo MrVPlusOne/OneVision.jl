@@ -201,6 +201,9 @@ function write_logs(
     @require_impl
 end
 
+"""
+Construct world dynamics - describes state(X) and observation(Z) for each car(agent).
+"""
 struct WorldDynamics{N,XDynamics <: Tuple,ZDynamics <: Tuple}
     dynamics::XDynamics
     obs_dynamics::ZDynamics
