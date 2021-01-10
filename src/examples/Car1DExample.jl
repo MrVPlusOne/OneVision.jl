@@ -122,13 +122,13 @@ OneVision.control_one(
     CarU(acc)
 end
 
-function run_example(;time_end = 20.0, 
+function run_example(; 
         setting::ExampleSetting,
         CF::CFName = onevision_cf,
         has_obstacle = true, use_bang_bang = true,
         seed = 1, 
         plot_result = true, log_prediction = false)
-    @unpack freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
+    @unpack time_end, freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
     times::Vector{𝕋} = collect(1:t_end)

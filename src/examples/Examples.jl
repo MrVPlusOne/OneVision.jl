@@ -29,7 +29,9 @@ default_delays = DelayModel(obs = 3, act = 4, com = 6, ΔT = 5)
 end
 
 @kwdef mutable struct ExampleSetting
-    "physics freqency"
+    "The length of the simulation (in seconds)"
+    time_end::ℝ
+    "physics freqency (in Hz)"
     freq::ℝ
     "Sensor noise strength"
     sensor_noise::ℝ

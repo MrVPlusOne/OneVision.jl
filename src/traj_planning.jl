@@ -22,6 +22,7 @@ TrajPlanningProblem(H::ℕ, ΔT::𝕋, dy, x_weights, u_weights;
     TrajPlanningProblem(Val(H), Val(ΔT), dy, x_weights, u_weights,
         optim_options, Ref{Any}(missing))
 
+const check_optimizer_converge = Ref(true)
 
 """
 Returns `(u⋆, objective_value)` where `u⋆[1] = u⋆(τ)`, `length(u⋆) = H`.
@@ -71,7 +72,7 @@ function plan_trajectory(
         p.optim_options,
         autodiff = :forward,
     )
-    if !Optim.converged(res)
+    if check_optimizer_converge[] && !Optim.converged(res)
         @warn "Optim not converged: $res"
     end
 
