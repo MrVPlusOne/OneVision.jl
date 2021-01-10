@@ -55,16 +55,15 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
     HVec(dy.external_u(x, t), dy.external_formation(x, t))
 end
 
-
 function formation_example(;
-        time_end = 20.0, freq = 100.0, 
-        noise = 0.005, sensor_noise = noise, 
-        delays = default_delays,
+        time_end = 20.0, 
+        setting::ExampleSetting,
         CF::CFName = onevision_cf,
         switch_formation = true,
         track_config = false,
         plot_result = true,
     )
+    @unpack freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     t_end = 𝕋(ceil(time_end * freq))

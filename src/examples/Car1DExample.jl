@@ -122,13 +122,13 @@ OneVision.control_one(
     CarU(acc)
 end
 
-function run_example(;time_end = 20.0, freq::ℝ = 100.0, 
-        delays = default_delays,
+function run_example(;time_end = 20.0, 
+        setting::ExampleSetting,
         CF::CFName = onevision_cf,
-        noise = 0.0, 
-        has_obstacle = true,
-        use_bang_bang = true,
-        seed = 1, plot_result = true, log_prediction = false)
+        has_obstacle = true, use_bang_bang = true,
+        seed = 1, 
+        plot_result = true, log_prediction = false)
+    @unpack freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
     times::Vector{𝕋} = collect(1:t_end)
@@ -151,13 +151,15 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
     ΔT = delays.ΔT
     world_model = WorldDynamics(
         fill((car_system(delta_t), WallObsModel()), N))
+    function xs_observer(xs, t)
+        (x -> x + randn(rng, CarX{ℝ}) * sensor_noise).(xs)
+    end
 
     comps = ["pos", "velocity", "acceleration", "obstacle"]
     function record_f(xs, zs, us)
         [(x -> x.pos).(xs) (x -> x.velocity).(xs) (u -> u.acc).(us) (z -> z.distance).(zs)]
     end
     
-    H = 20
     central = LeaderFollowerControl(
         warm_up_time = delays.act, 
         bang_bang_tol = use_bang_bang ? 1.0 : Inf)
@@ -176,6 +178,7 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
         (comps, record_f),
         times;
         loss_model,
+        xs_observer,
     )
 
     if log_prediction
