@@ -18,6 +18,7 @@ end
 struct CarU{R} <: FieldVector{1,R}
     acc::R
 end
+
 struct CarZ{R} <: FieldVector{2,R}
     detected::R
     distance::R
@@ -199,6 +200,7 @@ function run_ros_example(;time_end = 20.0, freq::ℝ = 20.0,
     use_bang_bang = true,
     seed = 1, plot_result = true, log_prediction = false)
 
+    #delays = DelayModel(obs = 100, act = 1, com = 6, ΔT = 5)
 
     t_end = 𝕋(ceil(time_end * freq)) # integer value 
     delta_t = 1 / freq

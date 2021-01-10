@@ -318,9 +318,9 @@ function ros_simulate(
     (controllers, msg_qs) = make_controllers(framework, init_status, t0)
     # the head of these queues corresponding to values that are currently taking effect
     msg_qs = shorten_queue.(msg_qs, Tc)
-    state_qs = SVector{N}(constant_queue.(xs, Tx))
-    obs_qs = SVector{N}(constant_queue.(zs, Tx))
-    act_qs = SVector{N}(constant_queue.(us, Tu))
+    state_qs = SVector{N}(constant_queue.(xs, 0))
+    obs_qs = SVector{N}(constant_queue.(zs, 0))
+    act_qs = SVector{N}(constant_queue.(us, 0))
 
     # we store the newest messages/actions into these caches and wait until 
     # the next control/actuation step to push them into the queues to take effect.
@@ -364,7 +364,7 @@ function ros_simulate(
         #print(typeof(zs))
         #print(typeof(us))
         #print(typeof(t))
-        xs1, zs1 = send_and_get_states(ros_conn, xs, zs, us, t)
+        xs1, zs1 = send_and_get_states(ros_conn, xs, us, zs, t)
         #xs1 = ros_sys_forward.(ross_conn, world_dynamics.dynamics, xs, us, t)
         #zs1 = obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
 
