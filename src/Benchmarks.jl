@@ -1,7 +1,7 @@
 module Benchmarks
 
 export run_performance_exps, show_performance_exps, visualize_benchmark
-export gen_raw_data
+export run_variation_exps, show_variation_exps
 
 using OneVision
 using OneVision.Examples
@@ -11,6 +11,7 @@ using DataFrames
 using ThreadsX
 using DrWatson
 using CSV
+using Plots
 
 function with_args(f; kws...)
     (args...; kws2...) -> f(args...; kws2..., kws...)
@@ -134,6 +135,7 @@ function run_performance_exps()
 
     tables = Dict(ThreadsX.map(settings) do (setname, setting)
         dfs = run_setting(setting)
+        next!(prog)
         setname => dfs
     end)
     finish!(prog)
@@ -172,36 +174,66 @@ function ensure_empty(dirpath)
     dirpath
 end
 
-"""
-Run and save raw data for the variation experiments.
-"""
-function gen_raw_data()
+function run_variation_exps()
     OneVision.TrajPlanning.check_optimizer_converge[] = false
     allsettings = vcat(
         ["Default" => defaults], disturbance_settings(), 
         noise_settings(), latency_settings(), horizon_settings())
-    results_dir = datadir("results_raw") |> ensure_empty
 
     @info "Pre-run the default setting for 1 sec..."
     @time run_setting(@set defaults.time_end = 1.0)
 
-    @info "Running benchmarks, results will be saved under $results_dir..."
+    @info "Running benchmarks..."
     prog = Progress(length(allsettings), 0.1, "Running benchmarks...")
 
     time_used = []
     iolock = ReentrantLock()
-    @time ThreadsX.foreach(allsettings; basesize=1) do (name, setting)
+    @time tables = Dict(ThreadsX.map(allsettings; basesize=1) do (name, setting)
         stats = @timed run_setting(setting) 
-        result = stats.value |> DataFrame
-        filename = joinpath(results_dir, "$name.csv")
         lock(iolock) do
-            CSV.write(filename, result)
             push!(time_used, (name = name, time = stats.time))
             next!(prog)
         end
-    end
+        name => stats.value
+    end)
     
     sort(time_used, by = x -> x.time, rev = true) |> DataFrame |> display
+    return tables
+end
+
+function show_variation_exps(tables)
+    scenario_names = first.(scenarios)
+    # map graph names to `(latency_settings, Default setting position)`
+    graph_names = [
+        "Communication Delay" => (latency_settings(), 2)
+        "External Disturbance" => (disturbance_settings(), 2)
+        "Sensor Noise" => (noise_settings(), 2)
+        "Prediction Horizon" => (horizon_settings(), 3)
+    ]
+
+    cfnames = first.(CFs)
+
+    for (gname, (settings, def_pos)) in graph_names
+        setnames = first.(settings)
+        insert!(setnames, def_pos, "Default")
+        xs = setnames
+        subplots = []
+        for (scenario_id, scenario_name) in enumerate(scenario_names)
+            ys = [tables[setting]["loss"][scenario_id, cf] 
+                    for setting in setnames, cf in cfnames]
+            p = plot(
+                xs, ys; 
+                title = scenario_name, 
+                yaxis = :log,
+            )
+            push!(subplots, p)
+        end
+        plot(subplots...; 
+            labels = hcat(string.(cfnames)...), 
+            legend = :outertopright,
+            size = (800, 500),
+        ) |> display
+    end
 end
 
 end # module Benchmarks

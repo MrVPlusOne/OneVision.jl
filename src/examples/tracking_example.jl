@@ -43,7 +43,7 @@ end
 
 function tracking_example(;setting::ExampleSetting, plot_result = true)
     X, Z, U = CarX{ℝ}, SVector{0, ℝ}, CarU{ℝ}
-    @unpack time_end, freq, noise = setting
+    @unpack time_end, freq, noise, H, delays = setting
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
@@ -56,9 +56,7 @@ function tracking_example(;setting::ExampleSetting, plot_result = true)
     dy_actual = @set dy.add_noise = add_noise
     z_dy = StaticObsDynamics()
 
-    delay_model = DelayModel(obs = 3, act = 3, com = 1, ΔT = 5)
-    @unpack ΔT, Ta = short_delay_names(delay_model)
-    H = 20
+    @unpack ΔT, Ta = short_delay_names(delays)
 
     # reference trajectory to track
     x_ref0 = X(x = 0, y = -0.5, θ = 0.0)
@@ -85,7 +83,7 @@ function tracking_example(;setting::ExampleSetting, plot_result = true)
         world_model = world_model
         x_weights = fill(X(x = 1, y = 1, θ = 1), N)
         u_weights = fill(U(v̂ = 1, ψ̂ = 1), N)
-        OvCF(central, world_model, delay_model, x_weights, u_weights; X, Z, N, H)
+        OvCF(central, world_model, delays, x_weights, u_weights; X, Z, N, H)
     end
 
     comps = ["x", "y", "θ", "ψ"]
@@ -94,7 +92,7 @@ function tracking_example(;setting::ExampleSetting, plot_result = true)
     end
 
     result, logs = simulate(
-        world_actual, delay_model, framework, init, (comps, record_f), 1:t_end)
+        world_actual, delays, framework, init, (comps, record_f), 1:t_end)
     # visualize(result; delta_t = 1 / freq) |> display
     if plot_result
         plot_tracking(result, freq, circ_traj) |> display

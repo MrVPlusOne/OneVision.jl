@@ -143,7 +143,6 @@ function formation_example(;
     # running at 20Hz
     delays_model  = delays
     delays_actual = delays_model
-    H = 20
     ΔT = delays_model.ΔT
 
     N = 4
