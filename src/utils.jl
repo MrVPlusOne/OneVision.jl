@@ -1,4 +1,5 @@
-export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
+export colvec2vec, colvec,  FuncT, <|
+export @todo, @require_impl, @asserteq, @unzip
 export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D, to_matrix
 export HVec
@@ -25,12 +26,13 @@ macro require_impl()
     :(error("Abstract method requires implementation."))
 end
 
-macro asserteq(left, right)
+macro asserteq(left, right, msgs...)
+    msg = isempty(msgs) ? "assertqe failed" : msgs[1]
     ex = string(:($left == $right))
     quote       
         @assert(
             (l = $(esc(left))) == (r = $(esc(right))),
-            "$l != $r in assertion: $($ex)")
+            $(esc(msg)) * " | `$l != $r` in assertion `$($ex)`")
     end
 end
 
