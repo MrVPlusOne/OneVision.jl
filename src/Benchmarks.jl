@@ -1,6 +1,7 @@
 module Benchmarks
 
-export run_benchmarks, show_benchmark, gen_raw_data
+export run_performance_exps, show_performance_exps, visualize_benchmark
+export gen_raw_data
 
 using OneVision
 using OneVision.Examples
@@ -71,14 +72,14 @@ basic_settings() = [
     "Default" => defaults
     "Larger Delays" =>  @set defaults.delays.com *= 4
     "No Delays" =>  @set defaults.delays = DelayModel(;obs = 0, act = 0, com = 1, ΔT = 5)
-    "Lower Freq" => 
-        let s1 = deepcopy(defaults)
-            s1.freq /= 5
-            s1.noise *= sqrt(5)
-            s1.sensor_noise *= sqrt(5)
-            s1.delays = DelayModel(obs = 1, act = 1, com = 1, ΔT = 1)
-            s1
-        end
+    # "Lower Freq" => 
+    #     let s1 = deepcopy(defaults)
+    #         s1.freq /= 5
+    #         s1.noise *= sqrt(5)
+    #         s1.sensor_noise *= sqrt(5)
+    #         s1.delays = DelayModel(obs = 1, act = 1, com = 1, ΔT = 1)
+    #         s1
+    #     end
 ]
 
 # benchmarks = Dict([
@@ -89,46 +90,64 @@ basic_settings() = [
 # ])
 
 function run_setting(setting)
-    rows = []
+    metric_tables = Dict{String, Any}()
     for (name, ex) in scenarios
-        results = [
-            cf_str => sum(ex(;plot_result = false, CF, setting)) / setting.freq
-            for (cf_str, CF) in CFs]
-        best = sortperm(results, by = x -> x[2])[1]
-        push!(rows, (Task = name, results..., Best = results[best][1]))
+        foreach(CFs) do (cf_str, CF)
+            loss, metrics = ex(;plot_result = false, CF, setting)
+            metrics["loss"] = sum(loss) / setting.freq
+            for (metric, v) in metrics
+                rows = get!(metric_tables, metric, [])
+                push!(rows, (Task = name, CF = cf_str, value = v))
+            end
+        end
     end
-    rows
+    Dict(k => rearrange_result_table(DataFrame(v)) for (k, v) in metric_tables)
 end
 
-function run_benchmarks()
-    function display_table(rows, name)
-        sep = " "^displaysize(stdout)[2]
-        println("\r$sep")
-        println("Setting: $name")
-        DataFrame(rows) |> display
+"""
+Rearrange the result DataFrame for easy comparison of the performance of 
+different CFs
+"""
+function rearrange_result_table(table::DataFrame)
+    rows = []
+    for df in groupby(table, :Task)
+        task = df[1, :Task]
+        cols = Symbol.(df[:, :CF]) .=> df[:, :value]
+        best = sortperm(cols, by = x -> x[2])[1]
+        
+        push!(rows, (Task = task, cols..., Best = df[best, :CF]))
     end
+    DataFrame(rows)
+end
+
+function display_table(rows, name)
+    sep = " "^displaysize(stdout)[2]
+    println("\r$sep")
+    println("==== $name ====")
+    display(rows)
+end
+
+function run_performance_exps()
     settings = basic_settings()
     num_tasks = length(settings)
     prog = Progress(num_tasks, 0.1, "Running benchmarks...")
-    iolock = ReentrantLock()
 
-    tables = Dict{String, Any}()
-    ThreadsX.foreach(settings) do (setname, setting)
-        rows = run_setting(setting)
-        lock(iolock) do
-            display_table(rows, setname)
-            flush(stdout)
-            next!(prog)
-            tables[setname] = rows
-        end
-    end
+    tables = Dict(ThreadsX.map(settings) do (setname, setting)
+        dfs = run_setting(setting)
+        setname => dfs
+    end)
     finish!(prog)
-    for (setname, _) in settings
-        display_table(tables[setname], setname)
+    show_performance_exps(tables)
+    return tables
+end
+
+function show_performance_exps(tables)
+    for (setname, _) in basic_settings(), (metric, df) in tables[setname]
+        display_table(df, "$setname: $metric")
     end
 end
 
-function show_benchmark(bench_name::String, setting_name::String, cf_name::Symbol)
+function visualize_benchmark(bench_name::String, setting_name::String, cf_name::Symbol)
     bench_name = strip(bench_name)
     setting_name = strip(setting_name)
 

@@ -1,7 +1,7 @@
 module Car2DExamples
 
 using OneVision
-using OneVision: ℝ, 𝕋, ℕ, @kwdef, °, @set, @_
+using OneVision: ℝ, 𝕋, ℕ, @kwdef, °, @set, @_, @asserteq
 using ..Examples
 using OneVision.NumericalIntegration
 using OneVision.SymbolMaps
@@ -17,6 +17,7 @@ using Printf: @sprintf
 using LinearAlgebra: norm
 import ColorSchemes
 import Dates
+using Statistics: mean
 
 include("common_2D.jl")
 include("tracking_example.jl")

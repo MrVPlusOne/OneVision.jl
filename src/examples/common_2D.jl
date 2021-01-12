@@ -256,7 +256,7 @@ function to_formation_frame(ctrl::FormationControl, s_leader)
         pos = rot * fp + pos_offset
         x, y = fp
         v = rot * @SVector[-ω*y, ω*x] + v_offset
-        pos, v
+        (pos = pos, v = v)
     end
 
     formpoint_to_refpoint

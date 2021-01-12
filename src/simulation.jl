@@ -8,6 +8,10 @@ using Unrolled
 using Base.Iterators: drop
 using ColorSchemes
 
+"""
+You can use a component name as the index to retrive the corresponding component.
+The result is a matrix indexed by (time, agent).
+"""
 @kwdef struct TrajectoryData
     times::Vector{𝕋}
     "values are indexed by (time, agent, component)"
@@ -22,7 +26,7 @@ end
 function Base.getindex(data::TrajectoryData, comp::String)
     c_id = indexin([comp], data.components)[1]
     @assert c_id !== nothing "component '$comp' not found."
-    data.values[:,:,(c_id::Int)]
+    view(data.values, :,:, (c_id::Int))
 end
 
 """
@@ -75,11 +79,11 @@ end
 """
 Simulate multiple distributed agents with delayed communication.
 
-Returns `(logs, loss_history)` or just `logs` if `loss_model` is `nothing`.
+Returns `logs`.
 
 # Arguments
 - `callback`: a function of the form `callback(xs,zs,us,loss,t) -> nothing` that runs at
-every time step.
+every time step. `loss` will be `nothing` if loss_model is `nothing`.
 """
 function simulate(
     world_dynamics::WorldDynamics{N},
@@ -170,7 +174,10 @@ end
 
 """
 Simulate multiple distributed agents with the given initial states and controllers and 
-return `(trajectory data, (logs [, loss_history]))`.
+return `(result::TrajectoryData, (logs [, loss_history]))`.
+
+`loss_history` is an `AxisArray` indexed by `(time, id, comp)`, where `comp` could be 
+either `:u` (action loss) or `:x` (state loss).
 
 # Arguments
 - `times::Vector{𝕋}`: the time instances at which the simulation should save the states in 

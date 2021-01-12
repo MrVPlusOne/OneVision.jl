@@ -1,4 +1,5 @@
 using OneVision
+using OneVision.Examples
 using OneVision.Examples.Car1DExample
 using OneVision.Examples.Car2DExamples
 
@@ -96,11 +97,16 @@ let
     end
 end # Double integrater let
 
-int_tests = (
-    () -> Car1DExample.run_example(time_end = 3, noise = 0.01, plot_result = false),
-    () -> Car2DExamples.tracking_example(time_end = 3, noise_level = 0.001, plot_result = false),
-    () -> Car2DExamples.formation_example(time_end = 3, noise = 0.001, plot_result = false),
-)
+int_tests = let 
+    setting = ExampleSetting(
+        time_end = 2, freq = 100, sensor_noise = 0.01, noise = 0.01, 
+        delays = default_delays, H = 20, model_error = 0.05)
+    [
+    () -> Car1DExample.run_example(;setting, plot_result = false)
+    () -> Car2DExamples.tracking_example(;setting, plot_result = false)
+    () -> Car2DExamples.formation_example(;setting, plot_result = false)
+    ]
+end 
 @testset "Integration test $i" for (i, f) in enumerate(int_tests)
     f()
     @test true

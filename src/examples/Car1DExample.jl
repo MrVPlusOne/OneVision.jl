@@ -2,11 +2,12 @@ module Car1DExample
 export CarX, CarZ, CarU, car_system, WallObsDynamics, LeaderFollowerControl
 
 using OneVision
-using OneVision: ℝ, 𝕋, ℕ, @kwdef, @unpack
+using OneVision: ℝ, 𝕋, ℕ, @kwdef, @unpack, @asserteq
 using OneVision.Examples
 using Random
 using StaticArrays
 using Plots
+using Statistics: mean
 
 import OneVision
 
@@ -122,6 +123,17 @@ OneVision.control_one(
     CarU(acc)
 end
 
+"""
+Compute the time-averaged distance between the leader and the follower 
+using a quadratic norm, i.e., √(1/T ∫ (x_1 - x_2)^2 dt) .
+"""
+function avg_distance(result::TrajectoryData)::ℝ
+    pos_data = result["pos"]
+    @asserteq size(pos_data, 2) 2 "there should only be 2 agents"
+    dis = (view(pos_data, :, 1) .- view(pos_data, :, 2)).^2
+    √(mean(dis))
+end
+
 function run_example(; 
         setting::ExampleSetting,
         CF::CFName = onevision_cf,
@@ -182,6 +194,7 @@ function run_example(;
     )
 
     if log_prediction
+        # this is out-dated
         t0, t1 = (0.0, 11.0)
         id = 1
         x_indices = [t for t in result.times if t0 ≤ (t - 1) * delta_t ≤ t1]
@@ -205,7 +218,7 @@ function run_example(;
     end
     plot_result && display(visualize(result; delta_t, loss))
     
-    loss
+    loss, Dict("avg distance" => avg_distance(result))
 end
 
 end # Car1DExampleLabeled

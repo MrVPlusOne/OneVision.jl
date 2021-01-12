@@ -41,8 +41,9 @@ function plot_tracking(data::TrajectoryData, freq::ℝ, ref_traj::Vector{CarX{�
     scene
 end
 
-function tracking_example(;freq = 100.0, time_end = 20.0, noise_level=0.0, plot_result = true)
+function tracking_example(;setting::ExampleSetting, plot_result = true)
     X, Z, U = CarX{ℝ}, SVector{0, ℝ}, CarU{ℝ}
+    @unpack time_end, freq, noise = setting
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
@@ -50,7 +51,7 @@ function tracking_example(;freq = 100.0, time_end = 20.0, noise_level=0.0, plot_
     dy = CarDynamics(;delta_t, max_ψ = 60°)
     rng = MersenneTwister(1234)
     function add_noise(x::X, t)::X where X
-        x + randn(rng, X) * noise_level
+        x + randn(rng, X) * noise
     end
     dy_actual = @set dy.add_noise = add_noise
     z_dy = StaticObsDynamics()

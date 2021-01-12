@@ -1,4 +1,6 @@
-function plot_formation(data::TrajectoryData, freq::ℝ, ctrl::FormationControl, formation_at_t)
+function plot_formation(
+    data::TrajectoryData, freq::ℝ, ctrl::FormationControl, formation_at_t
+)
     scene, layout = layoutscene(resolution = (1600, 1600))
 
     ax_traj = layout[1,1] = LAxis(
@@ -53,6 +55,40 @@ end
 
 function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
     HVec(dy.external_u(x, t), dy.external_formation(x, t))
+end
+
+"""
+Compute the time-averaged distance between each follower and their expected 
+formation position using a quadratic norm. Mathematically, this metric is defined as 
+
+     √(1/T ∫ ∑_i |x_i - x⋆_i|^2 dt) .
+"""
+function avg_formation_deviation(
+    data::TrajectoryData, ctrl::FormationControl, formation_at_t
+)::ℝ
+    function deviation_at(t)
+        x, y, θ, ψ, v = map(l -> data[l][t,1], ("x", "y", "θ", "ψ", "v"))
+        leader = CarX(;x, y, θ, ψ, v)
+        N = size(data.values, 2)
+        form = formation_at_t(t)[2:end]
+        @asserteq length(form) (N-1)
+        ref_pos = 
+            @_ (form
+            |> map(ref_point(ctrl.K, _),__) 
+            |> map(to_formation_frame(ctrl, leader), __)
+            |> map(_.pos, __))
+        x_data = data["x"][t, :]
+        y_data = data["y"][t, :]
+        total = 0.0
+        for i in 2:N
+            pos = @SVector[x_data[i], y_data[i]]
+            norm(pos - ref_pos[i-1])
+        end
+        actual_pos = [@SVector[x_data[i], y_data[i]] for i in 2:N]
+        sum(norm.(actual_pos .- ref_pos))
+    end
+
+    mean(deviation_at.(eachindex(data.times)))
 end
 
 function formation_example(;
@@ -160,6 +196,8 @@ function formation_example(;
         hcat(((p -> getfield(p,c)).(xs) for c in comps)...)
     end
 
+    formation_at_t(t) = form_from_id(external_formation(missing, t))
+
     world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
             |> WorldDynamics)
     result, (logs, loss) = simulate(
@@ -167,8 +205,9 @@ function formation_example(;
         ; xs_observer, loss_model)
     if plot_result
         visualize(result; delta_t = 1 / freq, loss) |> display
-        plot_formation(result, freq, central, 
-            t -> form_from_id(external_formation(missing, t))) |> display
+        plot_formation(result, freq, central, formation_at_t) |> display
     end
-    loss
+    metrics = Dict(
+        "avg deviation" => avg_formation_deviation(result, central, formation_at_t))
+    loss, metrics
 end
