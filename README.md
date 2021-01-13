@@ -1,9 +1,8 @@
 # OneVision
 
 ## Installation
-Note that the instruction below are prelimary and are intended to be used as internal reference only.
 
-### Download and install julia
+### Download and install Julia
 #### Linux ARM
 ```wget https://julialang-s3.julialang.org/bin/linux/aarch64/1.5/julia-1.5.3-linux-aarch64.tar.gz
 tar zxvf julia-1.5.3-linux-aarch64.tar.gz
@@ -36,25 +35,21 @@ To (locally) reproduce this project, do the following:
 This will install all necessary packages for you to be able to run the scripts and
 everything should work out of the box.
 
-### Installing necessary dependencies
+### Instal necessary dependencies
 #### arm modification (jetson tx2 specific)
 Due to package compatibiliies, some package will have to be installed in an alternative manner. Note that the following are only validated on Jetson TX2 with 18.04 - your milage may vary. 
 
-OSQP:
-```
-] add https://github.com/TongruiLi/OSQP.jl
-```
-
-
 
 #### Installation
-In the top directory of the cloned repo, press ] and then do 
-```
-activate .
-instantiate
-```
-### running
 
+#### Generate System Image
+This step can significantly reduce Julia compilation time.
+
+To generate a system image, from command line, run
+```
+julia scripts/precompile/generate_img.jl
+```
+It will take several minutes for this step to complete, after which a system image called "JuliaSysimage.dylib" will be created under the project root. To use this image, run all Julia commands with an additional `sysimage` flag like below
 ```
 julia --sysimage <path to image>
 ```
@@ -69,7 +64,7 @@ In correspondance to the paper, without further context the following references
 
 ## Usage
 The main framework depends on the control! function, which has the following signature:
-```
+```julia
 function OneVision.control!(
     π::OvController{N,X,Z,U,H},
     x::X,
@@ -82,7 +77,7 @@ x and z are the current state and observation, and msgs are the messages recieve
 
 ### Making a OneVision Controller
 We provide the following function to make a OneVision controller:
-```
+```julia
 function OneVision.make_controllers(
     cf::OvCF{N,X,Z,U,H},
     init_status::Each{Tuple{X,Z,U}},
