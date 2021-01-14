@@ -51,7 +51,7 @@ setting_args = [
 ]
 
 function run_benchmarks()
-
+    #Car2DExamples.formation_ros_example(switch_formation = false, plot_result = false)
     Car1DExample.run_ros_example(use_bang_bang = false, has_obstacle = false, plot_result = false)
 end
 

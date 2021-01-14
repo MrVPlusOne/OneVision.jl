@@ -136,7 +136,7 @@ function simulate(
             u, ms′ = control!(controllers[i], x, z, ms)
             u = limit_control(world_dynamics.dynamics[i], u, x, t)
             msg_cache[i, :] = ms′
-            act_cache[i] = u
+            act_cache[i] = u # from c++
         end
         us .= pushpop!.(act_qs, act_cache)
         for i in SOneTo(N)
@@ -168,6 +168,7 @@ function simulate(
         end
         xs .= xs1
         zs .= zs1
+        # add step - sim - send next comd, actual is dummy
     end
     logs = Dict(i => write_logs(controllers[i]) for i in 1:N)
     return logs

@@ -10,7 +10,7 @@ pkg_list = [
     :Optim,
     :Traceur,
     :Makie,
-    :GLMakie,
+    #:GLMakie,
     :MakieGallery,
     :JSON,
 ]
