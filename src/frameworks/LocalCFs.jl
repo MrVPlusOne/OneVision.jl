@@ -65,7 +65,7 @@ function OneVision.control!(
     u = ctrl.u[]
     if conpensate_comm
         x_future = self_estimate(x_dy, x_self, Timed(τ + Tu + t - 1, u) for t in 1:Tc)
-        z_future = self_z_estimate(z_dy,z_self,push_iter(x_self, x_future))
+        z_future = self_z_estimate(z_dy, z_self, push_iter(x_self, x_future))
         t_rec = τ + Tu + Tc
         msg = LocalCFMsg(x_future[end][t_rec], z_future[end][t_rec])
     end

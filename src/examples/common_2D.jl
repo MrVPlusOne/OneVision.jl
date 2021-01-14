@@ -27,7 +27,7 @@ end
     "maximal linear speed"
     max_v::ℝ = 5.0
     "maximal steering angle"
-    max_ψ::ℝ = 60°
+    max_ψ::ℝ = 30°
     "wheelbase between the front and rear wheels"
     l::ℝ = 0.1
     "rate of convergence for v to converge to v̂"

@@ -38,8 +38,8 @@ CFs = [
 defaults = ExampleSetting(
     time_end = 20.0,
     freq = 100.0,
-    noise = 0.1 / sqrt(100),
-    sensor_noise = 0.1 / sqrt(100),
+    noise = 0.05 / sqrt(100),
+    sensor_noise = 0.05 / sqrt(100),
     delays = DelayModel(obs = 3, act = 4, com = 5, ΔT = 5),
     H = 20,
     model_error = 0.0,
@@ -48,25 +48,29 @@ defaults = ExampleSetting(
 disturbance_settings() = [
     "0X Disturance" => @set defaults.noise = 0.0
     "4X Disturance" => @set defaults.noise *= 4.0
+    "8X Disturance" => @set defaults.noise *= 8.0
     "16X Disturance" => @set defaults.noise *= 16.0
 ]
 
 noise_settings() = [
     "0X Noise" => @set defaults.sensor_noise = 0.0
     "4X Noise" => @set defaults.sensor_noise *= 4.0
+    "8X Noise" => @set defaults.sensor_noise *= 8.0
     "16X Noise" => @set defaults.sensor_noise *= 16.0
 ]
 
 latency_settings() = [
     "Delay = 1" => @set defaults.delays.com = 1
     "4X Delay" => @set defaults.delays.com *= 4
+    "8X Delay" => @set defaults.delays.com *= 8
     "16X Delay" => @set defaults.delays.com *= 16
 ]
 
 horizon_settings() = [
     "H = 1" => @set defaults.H = 1
     "H = 5" => @set defaults.H = 5
-    "H = 40" => @set defaults.H = 40
+    "H = 10" => @set defaults.H = 5
+    "H = 50" => @set defaults.H = 40
 ]
 
 basic_settings() = [
@@ -154,7 +158,9 @@ function visualize_benchmark(bench_name::String, setting_name::String, cf_name::
     setting_name = strip(setting_name)
 
     ex = Dict(scenarios)[bench_name]
-    setting = Dict(basic_settings())[setting_name]
+    allsettings = vcat(basic_settings(), disturbance_settings(), 
+        noise_settings(), latency_settings(), horizon_settings())
+    setting = Dict(allsettings)[setting_name]
     CF = Dict(CFs)[cf_name]
     loss = ex(;plot_result = true, CF, setting)
     nothing
@@ -208,7 +214,7 @@ function show_variation_exps(tables)
         "Communication Delay" => (latency_settings(), 2)
         "External Disturbance" => (disturbance_settings(), 2)
         "Sensor Noise" => (noise_settings(), 2)
-        "Prediction Horizon" => (horizon_settings(), 3)
+        "Prediction Horizon" => (horizon_settings(), 4)
     ]
 
     cfnames = first.(CFs)

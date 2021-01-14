@@ -2,6 +2,8 @@ using DrWatson
 @quickactivate "OneVision"
 
 using OneVision.Benchmarks
+
+using DataFrames
 import AbstractPlotting
 AbstractPlotting.__init__()
 AbstractPlotting.inline!(false)
@@ -30,5 +32,5 @@ show_variation_exps(var_tables)
 
 visualize_benchmark("1D Leader Linear", "Larger Delays", :Local)
 visualize_benchmark("1D Leader With Obstacle", "Larger Delays", :ConstU)
-visualize_benchmark("2D Formation Driving", "No Delays", :OneVision)
+visualize_benchmark("2D Formation Driving", "16X Disturance", :OneVision)
 visualize_benchmark("2D Formation Switching", "No Delays", :ConstU)

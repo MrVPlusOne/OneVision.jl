@@ -95,6 +95,7 @@ function formation_example(;
         setting::ExampleSetting,
         CF::CFName = onevision_cf,
         switch_formation = true,
+        leader_noise = false,
         track_config = false,
         plot_result = true,
     )
@@ -112,9 +113,15 @@ function formation_example(;
                 v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * noise
     end
     dy_actual = @set dy_model.add_noise = add_noise
-    function xs_observer(xs, t)
-        (x -> x + randn(rng, X) * sensor_noise).(xs)
-    end
+    dy_actual_leader = leader_noise ? dy_actual : dy_model
+    xs_observer = 
+        if leader_noise
+            (xs, t) -> @_ (_ + randn(rng, X) * sensor_noise).(xs)
+        else
+            (xs, t) -> 
+                [i == 1 ? x : x + randn(rng, X) * sensor_noise 
+                for (i, x) in enumerate(xs)]
+        end
 
     function external_control(_, t)
         (if t ≤ 3 * freq
@@ -170,7 +177,8 @@ function formation_example(;
             kp = 1.0, ki = 0.0, kd = 0.0)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
-    central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
+    central = FormationControl(
+        (_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
     init = let 
@@ -197,8 +205,9 @@ function formation_example(;
 
     formation_at_t(t) = form_from_id(external_formation(missing, t))
 
-    world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
-            |> WorldDynamics)
+    world = WorldDynamics([
+        (dy_actual_leader, leader_z_dy) 
+        fill((dy_actual, StaticObsDynamics()), N-1)])
     result, (logs, loss) = simulate(
         world, delays_actual, framework, init, (comps, record_f), 1:t_end
         ; xs_observer, loss_model)

@@ -189,7 +189,7 @@ function draw_view(ui, freq, init, central, dy_model, form_from_id)
     xs_node, loss_node
 end
 
-function live_demo(CF::CFName = onevision_cf)
+function live_demo(; CF::CFName = onevision_cf, seed = 1234)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     ΔT = 5
@@ -203,12 +203,13 @@ function live_demo(CF::CFName = onevision_cf)
 
     # Car dynamics parameters
     dy_model = CarDynamics(;delta_t, max_ψ = 45°, integrator_samples = round_ceil(5 / ΔT))
-    rng = MersenneTwister(1234)
+    rng = MersenneTwister(seed)
     function add_noise(x::X, t)::X where X
         x + ui.dy_noise.value[] * CarX(
             x=0.0, y=0.0, θ=0.0, v = randn(rng, ℝ), ψ = randn(rng, ℝ))
     end
     dy_actual = @set dy_model.add_noise = add_noise
+    dy_actual_leader = dy_model
     
     function xs_observer(xs, t)
         (x -> x + randn(rng, X) * ui.sensor_noise.value[]).(xs)
@@ -273,8 +274,10 @@ function live_demo(CF::CFName = onevision_cf)
     
     framework = mk_cf(CF, world_model, central, delays_model, loss_model; X, Z, H)
 
-    world = ([(dy_actual, leader_z_dy); fill((dy_actual, StaticObsDynamics()), N-1)] 
-            |> WorldDynamics)
+    world = WorldDynamics([
+        (dy_actual_leader, leader_z_dy)
+        fill((dy_actual, StaticObsDynamics()), N-1)
+    ])
 
     xs_node, loss_node = draw_view(ui, freq, init, central, dy_model, form_from_id)
     start_time = Dates.now()
