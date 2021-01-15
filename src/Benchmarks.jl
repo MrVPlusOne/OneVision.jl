@@ -12,6 +12,8 @@ using ThreadsX
 using DrWatson
 using CSV
 using Plots
+using Random
+using Statistics
 
 function with_args(f; kws...)
     (args...; kws2...) -> f(args...; kws2..., kws...)
@@ -45,56 +47,29 @@ defaults = ExampleSetting(
     model_error = 0.0,
 )
 
-disturbance_settings() = [
-    "0X Disturance" => @set defaults.noise = 0.0
-    "4X Disturance" => @set defaults.noise *= 4.0
-    "8X Disturance" => @set defaults.noise *= 8.0
-    "16X Disturance" => @set defaults.noise *= 16.0
-]
-
-noise_settings() = [
-    "0X Noise" => @set defaults.sensor_noise = 0.0
-    "4X Noise" => @set defaults.sensor_noise *= 4.0
-    "8X Noise" => @set defaults.sensor_noise *= 8.0
-    "16X Noise" => @set defaults.sensor_noise *= 16.0
-]
-
-latency_settings() = [
-    "Delay = 1" => @set defaults.delays.com = 1
-    "4X Delay" => @set defaults.delays.com *= 4
-    "8X Delay" => @set defaults.delays.com *= 8
-    "16X Delay" => @set defaults.delays.com *= 16
-]
-
-horizon_settings() = [
-    "H = 1" => @set defaults.H = 1
-    "H = 5" => @set defaults.H = 5
-    "H = 10" => @set defaults.H = 5
-    "H = 50" => @set defaults.H = 40
+variation_settings() = [
+    "disturbance" => 
+        [x => @set defaults.noise *= x 
+        for x in [0.0, 1.0, 4.0, 8.0, 16.0]]
+    "noise" => 
+        [x => @set defaults.sensor_noise *= x 
+        for x in [0.0, 1.0, 4.0, 8.0, 16.0]]
+    "com delay" => 
+        [x => @set defaults.delays.com = x 
+        for x in [1, 5, 10, 20, 40]]
+    "horizon" =>
+        [x => @set defaults.H = x
+        for x in [1, 5, 10, 20, 40]]
 ]
 
 basic_settings() = [
     "Default" => defaults
     "Larger Delays" =>  @set defaults.delays.com *= 4
     "No Delays" =>  @set defaults.delays = DelayModel(;obs = 0, act = 0, com = 1, ΔT = 5)
-    # "Lower Freq" => 
-    #     let s1 = deepcopy(defaults)
-    #         s1.freq /= 5
-    #         s1.noise *= sqrt(5)
-    #         s1.sensor_noise *= sqrt(5)
-    #         s1.delays = DelayModel(obs = 1, act = 1, com = 1, ΔT = 1)
-    #         s1
-    #     end
 ]
 
-# benchmarks = Dict([
-#     "Performance vs Sensor Noise" => noise_settings
-#     "Performance vs Disturbance" => disturbance_settings
-#     "Performance vs Latency" => latency_settings
-#     "Performance vs Prediction Horizon" => horizon_settings
-# ])
 
-function run_setting(setting)
+function run_setting_old(setting)
     metric_tables = Dict{String, Any}()
     for (name, ex) in scenarios
         foreach(CFs) do (cf_str, CF)
@@ -107,6 +82,21 @@ function run_setting(setting)
         end
     end
     Dict(k => rearrange_result_table(DataFrame(v)) for (k, v) in metric_tables)
+end
+
+function run_setting(setting, seed)
+    rows = []
+    for (name, ex) in scenarios
+        foreach(CFs) do (cf_str, CF)
+            loss, metrics = ex(;plot_result = false, CF, setting, seed)
+            metrics["loss"] = sum(loss) / setting.freq
+            for (metric, v) in metrics
+                row = (task = name, cf = cf_str, metric = metric, value = v)
+                push!(rows, row)
+            end
+        end
+    end
+    rows
 end
 
 """
@@ -180,66 +170,102 @@ function ensure_empty(dirpath)
     dirpath
 end
 
-function run_variation_exps()
+flatten(xs::AbstractArray) = collect(Iterators.flatten(xs))
+
+function run_variation_exps(; num_of_runs)
+    "Used to de-correlatize seeds"
+    function make_seed(s) 
+        s
+    end
+
     OneVision.TrajPlanning.check_optimizer_converge[] = false
-    allsettings = vcat(
-        ["Default" => defaults], disturbance_settings(), 
-        noise_settings(), latency_settings(), horizon_settings())
+    seeds = make_seed.(1:num_of_runs)
+    all_tasks = [
+        @ntuple variation variable seed setting
+        for seed in seeds  # this prevents different seeds from running in parallel and helps precompilation
+        for (variation, tasks) in variation_settings() 
+        for (variable, setting) in tasks
+    ]
+    shuffle!(all_tasks)
 
-    @info "Pre-run the default setting for 1 sec..."
-    @time run_setting(@set defaults.time_end = 1.0)
-
-    @info "Running benchmarks..."
-    prog = Progress(length(allsettings), 0.1, "Running benchmarks...")
-
+    @info "Running benchmarks ($(length(all_tasks)) tasks)..."
+    prog = Progress(length(all_tasks), 0.01, "Running benchmarks...")
+    
     time_used = []
     iolock = ReentrantLock()
-    @time tables = Dict(ThreadsX.map(allsettings; basesize=1) do (name, setting)
-        stats = @timed run_setting(setting) 
+    all_rows = [] 
+    @time Threads.@threads for task in all_tasks
+        @unpack variation, variable, seed, setting = task
+        stats = @timed run_setting(setting, seed)
         lock(iolock) do
-            push!(time_used, (name = name, time = stats.time))
-            next!(prog)
+            time = stats.time
+            push!(time_used, @ntuple variation variable seed time)
+            for result in stats.value
+                @unpack task, cf, metric, value = result
+                r = @ntuple variation variable task cf metric seed value
+                push!(all_rows, r)
+            end
         end
-        name => stats.value
-    end)
-    
-    sort(time_used, by = x -> x.time, rev = true) |> DataFrame |> display
-    return tables
-end
-
-function show_variation_exps(tables)
-    scenario_names = first.(scenarios)
-    # map graph names to `(latency_settings, Default setting position)`
-    graph_names = [
-        "Communication Delay" => (latency_settings(), 2)
-        "External Disturbance" => (disturbance_settings(), 2)
-        "Sensor Noise" => (noise_settings(), 2)
-        "Prediction Horizon" => (horizon_settings(), 4)
-    ]
-
-    cfnames = first.(CFs)
-
-    for (gname, (settings, def_pos)) in graph_names
-        setnames = first.(settings)
-        insert!(setnames, def_pos, "Default")
-        xs = setnames
-        subplots = []
-        for (scenario_id, scenario_name) in enumerate(scenario_names)
-            ys = [tables[setting]["loss"][scenario_id, cf] 
-                    for setting in setnames, cf in cfnames]
-            p = plot(
-                xs, ys; 
-                title = scenario_name, 
-                yaxis = :log,
-            )
-            push!(subplots, p)
-        end
-        plot(subplots...; 
-            labels = hcat(string.(cfnames)...), 
-            legend = :outertopright,
-            size = (800, 500),
-        ) |> display
+        next!(prog)
     end
+
+    @_ DataFrame(time_used) |>
+        groupby(__, Not(:seed)) |>
+        combine(__, :time => mean => :avg_time) |>
+        sort!(__, [:avg_time], rev = true) |>
+        display
+
+    sort!(all_rows)
+    return DataFrame(all_rows)
 end
+
+dummy_data() = [
+    let value = rand()
+        cf = string(cf)
+        @ntuple variation variable task cf metric seed value
+    end
+    for seed in [1,2,3]  # this prevents different seeds from running in parallel and helps precompilation
+    for (variation, tasks) in variation_settings() 
+    for (variable, setting) in tasks
+    for (task, _) in scenarios
+    for (cf, _) in CFs
+    for metric in ["loss", "deviation"]
+] |> DataFrame
+
+function show_variation_exps(data::DataFrame)
+    function comp_stats(vs)
+        # quart1, quart2, quart3 = quantile(vs, [0.25, 0.5, 0.75])
+        (mid = mean(vs), lb = minimum(vs), ub = maximum(vs))
+    end
+
+    data = groupby(data, Not([:seed, :value]))
+    data = combine(data, :value => comp_stats => [:mid, :lb, :ub])
+    foreach(draw_variation_metric, groupby(data, [:variation, :metric], sort = true))
+end
+
+function draw_variation_metric(subdata)
+    var_name = subdata[1, :variation]
+    metric_name = subdata[1, :metric]
+    yscale = metric_name == "loss" ? :log10 : :identity
+    cf_names = hcat(first.(CFs)...)
+    plots = map(groupby(subdata, :task)) do taskdata
+        task_name = taskdata.task[1]
+        p = plot(;xlabel = var_name, ylabel = metric_name)
+        for cfname in cf_names
+            cfdata = filter(x -> x.cf == cfname, taskdata)
+            plot!(cfdata.variable, cfdata.mid; 
+                title = task_name, yscale = yscale,
+                marker = true, markersize = 3,
+                ribbon = (cfdata.mid .- cfdata.lb, cfdata.ub .- cfdata.mid))
+        end
+        p
+    end
+    N = length(plots)
+    plot(plots...; 
+        labels=string.(cf_names), legend = :outertopright, fillalpha = 0.3,
+        fontsize = 10, legendfontsize = 6, titlefontsize = 10,
+        layout = (N, 1), size = (400, 250 * N)) |> display
+end
+
 
 end # module Benchmarks

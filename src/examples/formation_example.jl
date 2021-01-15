@@ -95,6 +95,7 @@ function formation_example(;
         setting::ExampleSetting,
         CF::CFName = onevision_cf,
         switch_formation = true,
+        seed = 1234,
         leader_noise = false,
         track_config = false,
         plot_result = true,
@@ -107,7 +108,7 @@ function formation_example(;
 
     # Car dynamics parameters
     dy_model = CarDynamics(;delta_t, max_ψ = 45°)
-    rng = MersenneTwister(1234)
+    rng = MersenneTwister(seed)
     function add_noise(x::X, t)::X where X
         x + CarX(x=0.0, y=0.0, θ=0.0, 
                 v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * noise

@@ -4,9 +4,11 @@ using DrWatson
 using OneVision.Benchmarks
 
 using DataFrames
+import Plots
 import AbstractPlotting
 AbstractPlotting.__init__()
 AbstractPlotting.inline!(false)
+Plots.gr()
 
 perf_path = datadir("results", "performance_exps.bson")
 var_path = datadir("results", "variation_exps.bson")
@@ -21,7 +23,7 @@ perf_tables = wload(perf_path)[:perf_tables]
 show_performance_exps(perf_tables)
 
 # generate and save results
-var_tables = run_variation_exps()
+var_tables = run_variation_exps(num_of_runs = 10)
 wsave(var_path, @dict var_tables)
 
 # load and display results

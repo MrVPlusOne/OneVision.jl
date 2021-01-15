@@ -138,7 +138,7 @@ function run_example(;
         setting::ExampleSetting,
         CF::CFName = onevision_cf,
         has_obstacle = true, use_bang_bang = true,
-        seed = 1, 
+        seed = 1234, 
         plot_result = true, log_prediction = false)
     @unpack time_end, freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
     t_end = 𝕋(ceil(time_end * freq))
