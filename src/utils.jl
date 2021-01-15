@@ -3,8 +3,10 @@ export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D, to_matrix
 export HVec, h_vec_from_dict
 export @kwdef, @_, @set
+export serialize_to_b_array, deserialize_from_b_array
 
 import DataStructures
+
 using Base: @kwdef
 using Underscores: @_
 using Setfield: @set
@@ -13,6 +15,7 @@ using Parameters: @unpack
 using StaticArrays
 using AxisArrays
 using MacroTools: @capture
+using Serialization
 
 Optional{T} = Union{T, Missing}
 
@@ -282,3 +285,18 @@ struct HVec{C, D}
     d::D
 end
 
+"""
+Custom serialization!
+"""
+function serialize_to_b_array(a::Any)::Vector{UInt8}
+    write_iob = IOBuffer()
+    serialize(write_iob, a)
+    seekstart(write_iob)
+    content = take!(write_iob)
+    return content #String(content)
+end
+
+function deserialize_from_b_array(s::Vector{UInt8})
+    read_iob = IOBuffer(s)
+    return deserialize(read_iob)
+end

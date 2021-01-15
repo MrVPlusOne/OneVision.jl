@@ -65,7 +65,7 @@ function visualize(
         end
     end
     
-    Plots.plotlyjs()
+    #Plots.plotlyjs()
     Plots.plot(ps..., layout=(length(ps), 1), size=(500, length(ps) * 200), legend=false)
 end
 

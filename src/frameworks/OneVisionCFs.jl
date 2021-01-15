@@ -1,4 +1,4 @@
-export OvCF, OvController, OvMsg
+export OvCF, OvController, OvMsg, OvMsg_from_dict
 
 import Optim
 
@@ -8,6 +8,7 @@ struct OvMsg{X,Z}
 end
 
 to_optional(x::Timed{X}) where X = convert(Timed{Optional{X}}, x)
+
 
 """
 Matrices are indexed by [time, id].

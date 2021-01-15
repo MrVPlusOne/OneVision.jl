@@ -76,6 +76,9 @@ A controller struct - holds all necessary information
     target_v::ℝ = 2.0
 end
 
+
+
+
 OneVision.control_one(
     lf::LeaderFollowerControl, xs,zs, t::𝕋, id::ℕ
 )::CarU{ℝ} = begin
@@ -190,7 +193,6 @@ function run_example(;time_end = 20.0, freq::ℝ = 100.0,
 end
 
 """
-WIP
 Placed here for reuse of state/initial var definition
 """
 function run_ros_example(;time_end = 20.0, freq::ℝ = 20.0, 
@@ -279,23 +281,94 @@ function run_ros_example(;time_end = 20.0, freq::ℝ = 20.0,
 
     loss
 end
+"""
+TODO: change to file operation
+"""
+function get_initial_states(N)
+    return fill((CarX(0.0, 0.0), CarZ(0.0, 0.0), CarU(0.0)), N) # initialize state for each car
+end
+"""
+Open loop simulation
+"""
+function run_open_example(car_id::Integer)
+    N = 2
+    init_status = get_initial_states(N)
+    framework, world_dynamics = get_framework(init_status, car_id, has_obstacle = false)
 
+    """
+    Socket Communication only
+    """
+    function parse_state(result::Dict{String, Any})
+        x = result["x"]
+        return x
+    end
+    function parse_obs(result::Dict{String, Any}) 
+        z = result["z"]
+        return z
+    end
+
+    function parse_msg(result::Dict{String, Any})::Each{OvMsg}
+        println("msgs are", result["msgs"])
+        msg_array::Vector{UInt8} = result["msgs"]
+        msgs::Each{OvMsg} = deserialize_from_b_array(msg_array) #[deserialize(msg) for msg in result["msgs"]]
+        return msgs
+    end
+
+    start_framework(world_dynamics, framework, init_status, car_id, 5001, parse_state, parse_obs, parse_msg)
+end
 
 """
-Socket Communication only
+Open loop simulation
+return framework
 """
-function parse_state(result::Dict{String, Any})::X where {X} 
-    x::X = result["x"]
-    return x
-end
-function parse_obs(result::Dict{String, Any})::Z where {Z} 
-    z::Z = result["z"]
-    return z
+function get_framework(    
+    init_status :: Each{Tuple{X,Z,U}},
+    car_id :: Integer,
+    ;freq::ℝ = 20.0, 
+    delays = default_delays,
+    CF::CFName = onevision_cf,
+    has_obstacle = true,
+    use_bang_bang = true,
+    N = 2)where {X, Z, U}
+
+    #delays = DelayModel(obs = 100, act = 1, com = 6, ΔT = 5)
+
+    #t_end = 𝕋(ceil(time_end * freq)) # integer value 
+    delta_t = 1 / freq
+    #times::Vector{𝕋} = collect(1:t_end) # convert to array
+    #idx_to_time(xs) = (xs .- 1) .* delta_t # convert integer index to discrete timestep. -1 is to ensure start with 0
+    #rng = MersenneTwister(seed) # rng to generator
+
+    # generate information for each agent
+    agent_info(id) = begin
+        sys_dy = car_system(delta_t, t -> CarX(0.0, 0.0)) # construct system dynamics
+        obs_dy = 
+            if id == 1 && has_obstacle; WallObsDynamics(wall_position = 30.0, detector_range = 8.0)
+            else WallObsModel() end
+        # construct observation dynamics
+        sys_dy, obs_dy
+    end
+
+    world_dynamics = WorldDynamics([agent_info(i) for i in 1:N]) # construct world dynamics (state, obs) for each car
+    ΔT = delays.ΔT # DelayModel 
+    world_model = WorldDynamics(
+        fill((car_system(delta_t), WallObsModel()), N)) # knowledge of the world
+
+    H = 20 # number of horizen
+    central = LeaderFollowerControl(
+        warm_up_time = delays.act, 
+        bang_bang_tol = use_bang_bang ? 1.0 : Inf) # initialize control of the robot
+    x_weights = SVector{N}(fill(CarX(10.0, 1.0), N)) # state weight (hyperparam)
+    u_weights = SVector{N}(fill(CarU(0.1), N)) # actuation weight (hyperparam)
+    loss_model = RegretLossModel(central, world_model, x_weights, u_weights) # regression loss
+    framework = mk_cf(
+        CF, world_model, central, delays, loss_model; 
+        X = CarX{ℝ}, Z = CarZ{ℝ}, H) # construct a controller framework - bundle of information needed for simulation
+
+    return framework, world_dynamics
 end
 
-function parse_msg(result::Dict{String, Any})::Each{Msg} where {Msg}
-    msgs::Each{Msg} = result["msgs"] #[deserialize(msg) for msg in result["msgs"]]
-end
+
 
 
 end# Car1DExampleLabeled

@@ -1,6 +1,6 @@
 module ROS_SIM_RUNNER
 
-export run_benchmarks
+export run_benchmarks, run_open_loop
 
 using OneVision
 using OneVision.Examples
@@ -51,8 +51,11 @@ setting_args = [
 ]
 
 function run_benchmarks()
-    Car2DExamples.formation_ros_example(switch_formation = false, plot_result = false)
+    #Car2DExamples.formation_ros_example(switch_formation = false, plot_result = false)
     #Car1DExample.run_ros_example(use_bang_bang = false, has_obstacle = false, plot_result = false)
 end
 
+function run_open_loop()
+    Car1DExample.run_open_example(1)
+end
 end # module ROS_SIM_RUNNER

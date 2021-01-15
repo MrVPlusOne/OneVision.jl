@@ -80,6 +80,8 @@ function OneVision.control!(
 
 x and z are the current state and observation, and msgs are the messages recieved from other robot
 
+It will return an actuation for current robot and messages for all robots.
+
 ### Making a OneVision Controller
 We provide the following function to make a OneVision controller:
 ```

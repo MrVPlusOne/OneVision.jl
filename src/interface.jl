@@ -288,6 +288,6 @@ Socket Communication only
 
 define external to internal state/obs conversion
 """
-function parse_state(result::Dict{String, Any})::X where {X} @require_impl end
-function parse_obs(result::Dict{String, Any}) @require_impl end
-function parse_msg(result::Dict{String, Any})::Each{Msg} where {Msg} @require_impl end
+#function parse_state(result::Dict{String, Any})::X where {X} @require_impl end
+#function parse_obs(result::Dict{String, Any}) @require_impl end
+#function parse_msg(result::Dict{String, Any})::Each{Msg} where {Msg} @require_impl end
