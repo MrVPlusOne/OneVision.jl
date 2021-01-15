@@ -8,6 +8,7 @@ export CentralControl, CentralControlStateless, init_state, control_one, control
 export Controller, control!, write_logs
 export ControllerFramework, make_controllers, MsgQueue
 export Timed, attime, TimedQueue, pushpop!
+export parse_state, parse_obs # socket communication only
 
 const ℝ = Float64  # use 64-bit precision for real numbers
 const ℕ = Int64
@@ -280,3 +281,13 @@ function pushpop!(q::TimedQueue{T}, x::Timed) where T
     q.in_time += 1
     pushpop!(q.queue, x)
 end
+
+
+"""
+Socket Communication only
+
+define external to internal state/obs conversion
+"""
+function parse_state(result::Dict{String, Any})::X where {X} @require_impl end
+function parse_obs(result::Dict{String, Any}) @require_impl end
+function parse_msg(result::Dict{String, Any})::Each{Msg} where {Msg} @require_impl end

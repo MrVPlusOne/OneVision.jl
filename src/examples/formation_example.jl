@@ -291,3 +291,8 @@ if plot_result
 end
 loss
 end
+
+# TODO: change to distributed setting
+function OneVision.parse_obs(result::Dict{String, Any})
+    return [HVec{CarU{ℝ}, ℕ}(CarU{ℝ}(i["c"]), i["d"]) for i in result["zs"]]
+end

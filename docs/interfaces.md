@@ -7,6 +7,8 @@ There are 3 modular components to the framework:
 2. ROS communication interface - serve as bridge between Julia and ROS, as well as handling communciation among different cars
 3. ROS simulator/real robot - handles the simulation
 
+Initially, ROS communication interface will send initial state to Julia.
+
 ## Interface design
 ### Julia
 1. init_socket() initializes and returns the socket communication. Since this socket handles specifically 1-1 communciation, @async is not needed

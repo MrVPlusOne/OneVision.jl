@@ -1,7 +1,7 @@
 export @todo, @require_impl, colvec2vec, colvec, @unzip, FuncT, <|
 export FixedQueue, pushpop!, constant_queue, @get!
 export °, rotation2D, to_matrix
-export HVec
+export HVec, h_vec_from_dict
 export @kwdef, @_, @set
 
 import DataStructures
@@ -281,3 +281,4 @@ struct HVec{C, D}
     c::C
     d::D
 end
+

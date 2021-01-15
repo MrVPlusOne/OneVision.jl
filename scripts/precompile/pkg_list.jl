@@ -13,4 +13,6 @@ pkg_list = [
     #:GLMakie,
     :MakieGallery,
     :JSON,
+    :DrWatson,
+    :Serialization
 ]

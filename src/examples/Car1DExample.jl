@@ -7,6 +7,7 @@ using OneVision.Examples
 using Random
 using StaticArrays
 using Plots
+using Serialization
 
 import OneVision
 
@@ -279,4 +280,22 @@ function run_ros_example(;time_end = 20.0, freq::ℝ = 20.0,
     loss
 end
 
-end # Car1DExampleLabeled
+
+"""
+Socket Communication only
+"""
+function parse_state(result::Dict{String, Any})::X where {X} 
+    x::X = result["x"]
+    return x
+end
+function parse_obs(result::Dict{String, Any})::Z where {Z} 
+    z::Z = result["z"]
+    return z
+end
+
+function parse_msg(result::Dict{String, Any})::Each{Msg} where {Msg}
+    msgs::Each{Msg} = result["msgs"] #[deserialize(msg) for msg in result["msgs"]]
+end
+
+
+end# Car1DExampleLabeled

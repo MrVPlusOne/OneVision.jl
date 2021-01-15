@@ -56,7 +56,7 @@ instantiate
 ### running
 
 ```
-julia --sysimage <path to image>
+julia --sysimage <path to image> --project
 ```
 
 # Quickstart

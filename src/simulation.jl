@@ -334,6 +334,8 @@ function ros_simulate(
         for i in SOneTo(N)
             x, z = xs_read[i], zs_read[i]
             ms = first(msg_qs[i])
+            println("message is $ms \n")
+            println("type is", typeof(ms))
             u, ms′ = control!(controllers[i], x, z, ms)
             u = limit_control(world_dynamics.dynamics[i], u, x, t)
             msg_cache[i, :] = ms′
@@ -361,10 +363,6 @@ function ros_simulate(
 
         # update physics 
         @assert isopen(ros_conn) # make sure connection is still open
-        #print(typeof(xs))
-        #print(typeof(zs))
-        #print(typeof(us))
-        #print(typeof(t))
         xs1, zs1 = send_and_get_states(ros_conn, xs, us, zs, t)
         #xs1 = ros_sys_forward.(ross_conn, world_dynamics.dynamics, xs, us, t)
         #zs1 = obs_forward.(world_dynamics.obs_dynamics, xs, zs, t)
