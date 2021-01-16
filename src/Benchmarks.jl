@@ -2,6 +2,7 @@ module Benchmarks
 
 export run_performance_exps, show_performance_exps, visualize_benchmark
 export run_variation_exps, show_variation_exps
+export default_setting, variation_settings
 
 using OneVision
 using OneVision.Examples
@@ -14,6 +15,7 @@ using CSV
 using Plots
 using Random
 using Statistics
+using Measurements
 
 function with_args(f; kws...)
     (args...; kws2...) -> f(args...; kws2..., kws...)
@@ -37,6 +39,8 @@ CFs = [
     :OneVision => onevision_cf,
 ]
 
+default_setting() = defaults
+
 defaults = ExampleSetting(
     time_end = 20.0,
     freq = 100.0,
@@ -50,16 +54,19 @@ defaults = ExampleSetting(
 variation_settings() = [
     "disturbance" => 
         [x => @set defaults.noise *= x 
-        for x in [0.0, 1.0, 4.0, 8.0, 16.0]]
+        for x in [0.0, 1.0, 3.0, 6.0, 10.0]]
     "noise" => 
         [x => @set defaults.sensor_noise *= x 
-        for x in [0.0, 1.0, 4.0, 8.0, 16.0]]
+        for x in [0.0, 1.0, 3.0, 6.0, 10.0]]
     "com delay" => 
         [x => @set defaults.delays.com = x 
-        for x in [1, 5, 10, 20, 40]]
+        for x in [1, 5, 15, 30, 50]]
     "horizon" =>
         [x => @set defaults.H = x
-        for x in [1, 5, 10, 20, 40]]
+        for x in [1, 5, 10, 20, 30]]
+    "model error" =>
+        [x => @set defaults.model_error = x
+        for x in [0.0, 0.1, 0.3, 0.6, 1.0]]
 ]
 
 basic_settings() = [
@@ -90,6 +97,7 @@ function run_setting(setting, seed)
         foreach(CFs) do (cf_str, CF)
             loss, metrics = ex(;plot_result = false, CF, setting, seed)
             metrics["loss"] = sum(loss) / setting.freq
+            metrics["loss-state"] = sum(loss[:, :, :x]) / setting.freq
             for (metric, v) in metrics
                 row = (task = name, cf = cf_str, metric = metric, value = v)
                 push!(rows, row)
@@ -137,49 +145,63 @@ function run_performance_exps()
     return tables
 end
 
-function show_performance_exps(tables)
-    for (setname, _) in basic_settings(), (metric, df) in tables[setname]
-        display_table(df, "$setname: $metric")
+"""
+Generates `num` random seeds that are unlikely to be correlated.
+"""
+function independent_seeds(num; seed = 1)
+    rng = MersenneTwister(seed)
+    (1:num) .+ rand(rng, 1:num*100, num)
+end
+
+function run_performance_exps(; num_of_runs)
+    OneVision.TrajPlanning.check_optimizer_converge[] = false
+    seeds = independent_seeds(num_of_runs)
+
+    @info "Running performance benchmarks ($num_of_runs tasks)..."
+    prog = Progress(num_of_runs, 0.1, "Running benchmarks...")
+    
+    iolock = ReentrantLock()
+    all_rows = []
+    @time Threads.@threads for seed in seeds
+        results = run_setting(defaults, seed)
+        lock(iolock) do
+            for result in results
+                @unpack task, cf, metric, value = result
+                push!(all_rows, @ntuple(task, cf, metric, seed, value))
+            end
+        end
+        next!(prog)
+    end
+
+    return DataFrame(all_rows)
+end
+
+function show_performance_exps(df)
+    comp_stats(vs) = mean(vs) ± std(vs)
+    df = groupby(df, Not([:seed, :value]))
+    df = combine(df, :value => comp_stats => :value)
+    cf_symbols = first.(CFs)
+    for subdf in groupby(df, :metric)
+        metric = subdf.metric[1]
+        if metric == "loss-state" continue end
+        println("=== Metric: $(metric) ===")
+        @_ groupby(subdf, :task) |> 
+            combine(__, [:cf, :value] => ((cfs, vs) -> (; zip(cfs, vs)...)) => AsTable) |>
+            display
     end
 end
 
-function visualize_benchmark(bench_name::String, setting_name::String, cf_name::Symbol)
-    bench_name = strip(bench_name)
-    setting_name = strip(setting_name)
-
-    ex = Dict(scenarios)[bench_name]
-    allsettings = vcat(basic_settings(), disturbance_settings(), 
-        noise_settings(), latency_settings(), horizon_settings())
-    setting = Dict(allsettings)[setting_name]
-    CF = Dict(CFs)[cf_name]
-    loss = ex(;plot_result = true, CF, setting)
+function visualize_benchmark(scenario::String, setting::ExampleSetting, cf::String; seed = 1)
+    ex = Dict(scenarios)[scenario]
+    CF = Dict(CFs)[Symbol(cf)]
+    ex(;plot_result = true, CF, setting, seed)
     nothing
 end
 
-function ensure_empty(dirpath)
-    if isdir(dirpath)
-        println("** $dirpath already exists, delete to proceed? (y/n):")
-        answer = readline()
-        if lowercase(strip(answer)) == "y"
-            rm(dirpath, force=true, recursive=true)
-        else
-            error("Aborted.")
-        end
-    end
-    mkdir(dirpath)
-    dirpath
-end
-
-flatten(xs::AbstractArray) = collect(Iterators.flatten(xs))
 
 function run_variation_exps(; num_of_runs)
-    "Used to de-correlatize seeds"
-    function make_seed(s) 
-        s
-    end
-
     OneVision.TrajPlanning.check_optimizer_converge[] = false
-    seeds = make_seed.(1:num_of_runs)
+    seeds = independent_seeds(num_of_runs)
     all_tasks = [
         @ntuple variation variable seed setting
         for seed in seeds  # this prevents different seeds from running in parallel and helps precompilation
@@ -189,11 +211,11 @@ function run_variation_exps(; num_of_runs)
     shuffle!(all_tasks)
 
     @info "Running benchmarks ($(length(all_tasks)) tasks)..."
-    prog = Progress(length(all_tasks), 0.01, "Running benchmarks...")
+    prog = Progress(length(all_tasks), 0.1, "Running benchmarks...")
     
     time_used = []
     iolock = ReentrantLock()
-    all_rows = [] 
+    all_rows = []
     @time Threads.@threads for task in all_tasks
         @unpack variation, variable, seed, setting = task
         stats = @timed run_setting(setting, seed)
@@ -219,19 +241,6 @@ function run_variation_exps(; num_of_runs)
     return DataFrame(all_rows)
 end
 
-dummy_data() = [
-    let value = rand()
-        cf = string(cf)
-        @ntuple variation variable task cf metric seed value
-    end
-    for seed in [1,2,3]  # this prevents different seeds from running in parallel and helps precompilation
-    for (variation, tasks) in variation_settings() 
-    for (variable, setting) in tasks
-    for (task, _) in scenarios
-    for (cf, _) in CFs
-    for metric in ["loss", "deviation"]
-] |> DataFrame
-
 function show_variation_exps(data::DataFrame)
     function comp_stats(vs)
         # quart1, quart2, quart3 = quantile(vs, [0.25, 0.5, 0.75])
@@ -240,13 +249,14 @@ function show_variation_exps(data::DataFrame)
 
     data = groupby(data, Not([:seed, :value]))
     data = combine(data, :value => comp_stats => [:mid, :lb, :ub])
-    foreach(draw_variation_metric, groupby(data, [:variation, :metric], sort = true))
+    @showprogress map(draw_variation_metric, groupby(data, [:variation, :metric], sort = true))
+    nothing
 end
 
 function draw_variation_metric(subdata)
     var_name = subdata[1, :variation]
     metric_name = subdata[1, :metric]
-    yscale = metric_name == "loss" ? :log10 : :identity
+    yscale = startswith(metric_name, "loss") ? :log10 : :identity
     cf_names = hcat(first.(CFs)...)
     plots = map(groupby(subdata, :task)) do taskdata
         task_name = taskdata.task[1]

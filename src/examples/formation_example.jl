@@ -67,7 +67,7 @@ function avg_formation_deviation(
     data::TrajectoryData, ctrl::FormationControl, formation_at_t
 )::ℝ
     function deviation_at(t)
-        x, y, θ, ψ, v = map(l -> data[l][t,1], ("x", "y", "θ", "ψ", "v"))
+        x, y, θ, ψ, v = map(l -> data[l][t, 1], ("x", "y", "θ", "ψ", "v"))
         leader = CarX(;x, y, θ, ψ, v)
         N = size(data.values, 2)
         form = formation_at_t(t)[2:end]
@@ -85,7 +85,7 @@ function avg_formation_deviation(
             norm(pos - ref_pos[i-1])
         end
         actual_pos = [@SVector[x_data[i], y_data[i]] for i in 2:N]
-        sum(norm.(actual_pos .- ref_pos))
+        mean(norm.(actual_pos .- ref_pos))
     end
 
     mean(deviation_at.(eachindex(data.times)))
@@ -100,21 +100,22 @@ function formation_example(;
         track_config = false,
         plot_result = true,
     )
-    @unpack time_end, freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
+    @unpack time_end, freq, noise, sensor_noise, delays, H, model_error = setting
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
 
     # Car dynamics parameters
-    dy_model = CarDynamics(;delta_t, max_ψ = 45°)
+    max_ψ = 45°
+    dy_model = CarDynamics(l = 0.1 * (1+model_error) ;delta_t)
     rng = MersenneTwister(seed)
     function add_noise(x::X, t)::X where X
         x + CarX(x=0.0, y=0.0, θ=0.0, 
                 v = randn(rng, ℝ), ψ = randn(rng, ℝ)) * noise
     end
-    dy_actual = @set dy_model.add_noise = add_noise
-    dy_actual_leader = leader_noise ? dy_actual : dy_model
+    dy_actual = CarDynamics(; delta_t, max_ψ, add_noise)
+    dy_actual_leader = leader_noise ? dy_actual : CarDynamics(; delta_t, max_ψ)
     xs_observer = 
         if leader_noise
             (xs, t) -> @_ (_ + randn(rng, X) * sensor_noise).(xs)

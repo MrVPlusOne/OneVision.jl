@@ -15,7 +15,7 @@ var_path = datadir("results", "variation_exps.bson")
 
 
 # generate and save results
-perf_tables = run_performance_exps()
+perf_tables = run_performance_exps(num_of_runs = 100)
 wsave(perf_path, @dict perf_tables)
 
 # load and display results
@@ -30,9 +30,4 @@ wsave(var_path, @dict var_tables)
 var_tables = wload(var_path)[:var_tables]
 show_variation_exps(var_tables)
 
-
-
-visualize_benchmark("1D Leader Linear", "Larger Delays", :Local)
-visualize_benchmark("1D Leader With Obstacle", "Larger Delays", :ConstU)
-visualize_benchmark("2D Formation Driving", "16X Disturance", :OneVision)
-visualize_benchmark("2D Formation Switching", "No Delays", :ConstU)
+visualize_benchmark("1D Leader Linear", default_setting(), "Local")

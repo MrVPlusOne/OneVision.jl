@@ -35,19 +35,20 @@ end
 
 struct CarSystem{Noise} <: SysDynamics
     dt::ℝ
+    mass::ℝ
     v_noise::Noise
 end
 
 
-function car_system(dt::ℝ, v_noise::Function = _ -> 0.0)
-    CarSystem(dt, v_noise)
+function car_system(dt::ℝ, v_noise::Function = _ -> 0.0; mass::ℝ = 1.0)
+    CarSystem(dt, mass, v_noise)
 end
 
 function OneVision.sys_forward(dy::CarSystem, x::CarX{R}, u, t::𝕋)::CarX{R} where R
-    @unpack dt, v_noise = dy
+    @unpack dt, mass, v_noise = dy
     CarX(
-        pos = x.pos + x.velocity * dt + 0.5 * u.acc * dt^2, 
-        velocity = x.velocity + u.acc * dt + v_noise(t), 
+        pos = x.pos + x.velocity * dt + 0.5 * u.acc / mass * dt^2, 
+        velocity = x.velocity + u.acc / mass * dt + v_noise(t), 
         acc = u.acc,
     )
 end
@@ -140,7 +141,7 @@ function run_example(;
         has_obstacle = true, use_bang_bang = true,
         seed = 1234, 
         plot_result = true, log_prediction = false)
-    @unpack time_end, freq, noise, sensor_noise, delays, H = setting  #TODO: unpack more
+    @unpack time_end, freq, noise, sensor_noise, delays, H, model_error = setting
     t_end = 𝕋(ceil(time_end * freq))
     delta_t = 1 / freq
     times::Vector{𝕋} = collect(1:t_end)
@@ -162,7 +163,7 @@ function run_example(;
     init_states = fill((CarX(0.0, 0.0, 0.0), CarZ(false, 0.0), CarU(0.0)), N)
     ΔT = delays.ΔT
     world_model = WorldDynamics(
-        fill((car_system(delta_t), WallObsModel()), N))
+        fill((car_system(delta_t; mass = 1.0 / (1 + model_error)), WallObsModel()), N))
     function xs_observer(xs, t)
         (x -> x + randn(rng, CarX{ℝ}) * sensor_noise).(xs)
     end
