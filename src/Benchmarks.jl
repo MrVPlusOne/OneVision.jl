@@ -176,8 +176,21 @@ function run_performance_exps(; num_of_runs)
     return DataFrame(all_rows)
 end
 
+"""
+Convert "loss" into "loss sqrt" and drop "loss-state".
+"""
+function prepare_metrics(df::AbstractDataFrame)
+    df = filter(r -> r.metric != "loss-state", df)
+    rows = df.metric .== "loss"
+    df[rows, :value] = log10.(df[rows, :value])
+    df[rows, :metric] .= Ref("log loss")
+    df
+end
+
 function show_performance_exps(df)
     comp_stats(vs) = mean(vs) ± std(vs)
+
+    df = prepare_metrics(df)
     df = groupby(df, Not([:seed, :value]))
     df = combine(df, :value => comp_stats => :value)
     cf_symbols = first.(CFs)
@@ -241,12 +254,13 @@ function run_variation_exps(; num_of_runs)
     return DataFrame(all_rows)
 end
 
-function show_variation_exps(data::DataFrame)
+function show_variation_exps(df::DataFrame)
     function comp_stats(vs)
         # quart1, quart2, quart3 = quantile(vs, [0.25, 0.5, 0.75])
         (mid = mean(vs), lb = minimum(vs), ub = maximum(vs))
     end
 
+    data = prepare_metrics(df)
     data = groupby(data, Not([:seed, :value]))
     data = combine(data, :value => comp_stats => [:mid, :lb, :ub])
     @showprogress map(draw_variation_metric, groupby(data, [:variation, :metric], sort = true))
@@ -256,7 +270,7 @@ end
 function draw_variation_metric(subdata)
     var_name = subdata[1, :variation]
     metric_name = subdata[1, :metric]
-    yscale = startswith(metric_name, "loss") ? :log10 : :identity
+    # yscale = startswith(metric_name, "loss") ? :log10 : :identity
     cf_names = hcat(first.(CFs)...)
     plots = map(groupby(subdata, :task)) do taskdata
         task_name = taskdata.task[1]
@@ -264,7 +278,7 @@ function draw_variation_metric(subdata)
         for cfname in cf_names
             cfdata = filter(x -> x.cf == cfname, taskdata)
             plot!(cfdata.variable, cfdata.mid; 
-                title = task_name, yscale = yscale,
+                title = task_name, #yscale = yscale,
                 marker = true, markersize = 3,
                 ribbon = (cfdata.mid .- cfdata.lb, cfdata.ub .- cfdata.mid))
         end
