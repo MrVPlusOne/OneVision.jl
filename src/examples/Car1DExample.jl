@@ -290,10 +290,12 @@ end
 """
 Open loop simulation
 """
-function run_open_example(car_id::Integer)
-    N = 2
+function run_open_example(car_id::Integer, fleet_size::Integer)
+    N = fleet_size
     init_status = get_initial_states(N)
-    framework, world_dynamics = get_framework(init_status, car_id, has_obstacle = false)
+    framework, world_dynamics = get_framework(init_status, car_id, fleet_size, has_obstacle = false)
+
+    port::Integer = car_id + 5000
 
     """
     Socket Communication only
@@ -309,12 +311,12 @@ function run_open_example(car_id::Integer)
 
     function parse_msg(result::Dict{String, Any})::Each{OvMsg}
         println("msgs are", result["msgs"])
-        msg_array::Vector{UInt8} = result["msgs"]
-        msgs::Each{OvMsg} = deserialize_from_b_array(msg_array) #[deserialize(msg) for msg in result["msgs"]]
+        msg_array::Each{Vector{UInt8}} = result["msgs"]
+        msgs::Each{OvMsg} = [deserialize_from_b_array(m) for m in msg_array] #[deserialize(msg) for msg in result["msgs"]]
         return msgs
     end
 
-    start_framework(world_dynamics, framework, init_status, car_id, 5001, parse_state, parse_obs, parse_msg)
+    start_framework(world_dynamics, framework, init_status, car_id, port, fleet_size, parse_state, parse_obs, parse_msg)
 end
 
 """
@@ -324,13 +326,14 @@ return framework
 function get_framework(    
     init_status :: Each{Tuple{X,Z,U}},
     car_id :: Integer,
+    fleet_size ::Integer
     ;freq::ℝ = 20.0, 
     delays = default_delays,
     CF::CFName = onevision_cf,
     has_obstacle = true,
     use_bang_bang = true,
-    N = 2)where {X, Z, U}
-
+    )where {X, Z, U}
+    N::Int64 = fleet_size
     #delays = DelayModel(obs = 100, act = 1, com = 6, ΔT = 5)
 
     #t_end = 𝕋(ceil(time_end * freq)) # integer value 

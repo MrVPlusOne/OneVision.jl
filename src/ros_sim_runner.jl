@@ -55,7 +55,7 @@ function run_benchmarks()
     #Car1DExample.run_ros_example(use_bang_bang = false, has_obstacle = false, plot_result = false)
 end
 
-function run_open_loop()
-    Car1DExample.run_open_example(1)
+function run_open_loop(car_id::Integer, fleet_size::Integer)
+    Car1DExample.run_open_example(car_id, fleet_size)
 end
 end # module ROS_SIM_RUNNER

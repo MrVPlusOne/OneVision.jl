@@ -14,5 +14,6 @@ pkg_list = [
     :MakieGallery,
     :JSON,
     :DrWatson,
-    :Serialization
+    :Serialization,
+    :ArgParse
 ]

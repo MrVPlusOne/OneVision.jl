@@ -21,7 +21,7 @@ Send the current known states and actuation for ROS to execute. Block untill a r
 Due to communication need - now
 """
 function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, t::Int64, f_state, f_obs, f_msg) where {X, Z, U, N, Msg}
-    s = JSON.json(Dict("states"=> x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => serialize_to_b_array(msgs))) * "\n"
+    s = JSON.json(Dict("states"=> x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs] )) * "\n"
     println("sending $s")
     write(conn, s)
     result = readline(conn)
@@ -56,7 +56,7 @@ end
 This function starts the distributed process.
 """
 function start_framework(world_dynamics::WorldDynamics{N},  framework::ControllerFramework{X,Z,U,Msg,Log}, 
-    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, f_state, f_obs, f_msg) where {X, Z, U, Msg, Log, N}
+    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, f_state, f_obs, f_msg) where {X, Z, U, Msg, Log, N}
     t0::𝕋 = 1
     t = t0
     dt = 1.0/100

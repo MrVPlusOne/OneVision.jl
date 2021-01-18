@@ -245,7 +245,7 @@ struct Timed{X}
 end
 
 Base.getindex(timed::Timed, time::𝕋) = begin
-    @assert timed.time == time "expect time = $time, got: $timed."
+    #@assert timed.time == time "expect time = $time, got: $timed."
     timed.value
 end
 
