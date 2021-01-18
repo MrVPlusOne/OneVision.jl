@@ -70,10 +70,10 @@ A controller struct - holds all necessary information
     warm_up_time::𝕋  
     "Will only use bang bang control when difference is larger than this"
     bang_bang_tol::ℝ = Inf
-    k_v::ℝ = 3.0
+    k_v::ℝ = 10.0#3.0
     k_x::ℝ = 2.0
     stop_distance::ℝ = 4.0
-    target_v::ℝ = 2.0
+    target_v::ℝ = 0.75
 end
 
 
@@ -293,7 +293,7 @@ Open loop simulation
 function run_open_example(car_id::Integer, fleet_size::Integer)
     N = fleet_size
     init_status = get_initial_states(N)
-    framework, world_dynamics = get_framework(init_status, car_id, fleet_size, has_obstacle = false)
+    framework, world_dynamics = get_framework(init_status, car_id, fleet_size, has_obstacle = true)
 
     port::Integer = car_id + 5000
 

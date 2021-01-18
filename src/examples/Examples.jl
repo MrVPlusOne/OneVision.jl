@@ -6,7 +6,7 @@ export CFName, naive_cf, local_cf, const_u_cf, onevision_cf
 
 using OneVision
 
-default_delays = DelayModel(obs = 3, act = 4, com = 6, ΔT = 5)
+default_delays = DelayModel(obs = 1, act = 1, com = 1, ΔT = 1)
 
 @enum CFName naive_cf local_cf const_u_cf onevision_cf
 
