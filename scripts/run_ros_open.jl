@@ -15,6 +15,10 @@ function parse_commandline()
             help = "number of car"
             arg_type = Int32
             required = true
+        "--freq"
+            help = "frequency of controller"
+            arg_type = Int32
+            required = true
     end
 
     return parse_args(s)
@@ -28,7 +32,8 @@ function run()
     end
     car_id::Int32 = parsed_args["car_id"]
     fleet_size::Int32 = parsed_args["fleet_size"]
-    run_open_loop(car_id, fleet_size)
+    freq::Int32 = parsed_args["freq"]
+    run_open_loop(car_id, fleet_size, freq)
 end
 
 run()

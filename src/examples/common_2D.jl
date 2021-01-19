@@ -27,13 +27,13 @@ end
     "maximal linear speed"
     max_v::ℝ = 5.0
     "maximal steering angle"
-    max_ψ::ℝ = 60°
+    max_ψ::ℝ = 15°
     "wheelbase between the front and rear wheels"
-    l::ℝ = 0.1
+    l::ℝ = 0.324
     "rate of convergence for v to converge to v̂"
-    k_v::ℝ = 5.0
+    k_v::ℝ = 5.0*5
     "rate of convergence for ψ to converge to ψ̂"
-    k_ψ::ℝ = 10.0
+    k_ψ::ℝ = 10.0*1.7
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
@@ -256,7 +256,7 @@ function to_formation_frame(ctrl::FormationControl, s_leader)
         pos = rot * fp + pos_offset
         x, y = fp
         v = rot * @SVector[-ω*y, ω*x] + v_offset
-        pos, v
+        (pos = pos, v = v)
     end
 
     formpoint_to_refpoint

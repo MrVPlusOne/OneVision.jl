@@ -32,7 +32,7 @@ function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}
     x::X = f_state(result_dict)
     z::Z = f_obs(result_dict)
     msgs::Each{Msg} = f_msg(result_dict)
-    return x, z, msgs, 0
+    return x, z, msgs, t
 
     """
     # state: StaticArrays.MArray{Tuple{2},OneVision.Examples.Car1DExample.CarX{Float64},1,2}
@@ -56,10 +56,10 @@ end
 This function starts the distributed process.
 """
 function start_framework(world_dynamics::WorldDynamics{N},  framework::ControllerFramework{X,Z,U,Msg,Log}, 
-    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, f_state, f_obs, f_msg) where {X, Z, U, Msg, Log, N}
+    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, freq, f_state, f_obs, f_msg) where {X, Z, U, Msg, Log, N}
     t0::𝕋 = 1
     t = t0
-    dt = 1.0/100
+    dt = 1.0/freq
     conn = init_socket(port_number)
     # unzip the initial states
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})

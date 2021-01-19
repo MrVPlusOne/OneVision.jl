@@ -13,14 +13,14 @@ function with_args(f; kws...)
 end
 
 benchmarks = [
-    "1D Leader Linear" => with_args(Car1DExample.run_example, 
-        use_bang_bang = false, has_obstacle = false, plot_result = false) 
-    "1D Leader With Obstacle" => with_args(Car1DExample.run_example,
-        use_bang_bang = true, has_obstacle = true, plot_result = false)
+    #"1D Leader Linear" => with_args(Car1DExample.run_example, 
+    #    use_bang_bang = false, has_obstacle = false, plot_result = false) 
+    #"1D Leader With Obstacle" => with_args(Car1DExample.run_example,
+    #    use_bang_bang = true, has_obstacle = true, plot_result = false)
     "2D Formation Driving" => with_args(Car2DExamples.formation_example,
         switch_formation = false, plot_result = false)
-    "2D Formation Switching" => with_args(Car2DExamples.formation_example,
-        switch_formation = true, plot_result = false)
+    #"2D Formation Switching" => with_args(Car2DExamples.formation_example,
+    #    switch_formation = true, plot_result = false)
 ]
 
 CFs = [
@@ -51,6 +51,9 @@ setting_args = [
 ]
 
 function run_benchmarks()
+
+    Car2DExamples.formation_example(switch_formation = false, plot_result = false)
+    exit(0)
     num_tasks = length(setting_args) * length(benchmarks)
     prog = Progress(num_tasks+1+length(setting_args), 0.1, "Running benchmarks...")
 
