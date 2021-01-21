@@ -29,7 +29,7 @@ end
     "maximal steering angle"
     max_ψ::ℝ = 15°
     "wheelbase between the front and rear wheels"
-    l::ℝ = 0.324
+    l::ℝ = 0.324 # TODO: change to old default value
     "rate of convergence for v to converge to v̂"
     k_v::ℝ = 5.0*5
     "rate of convergence for ψ to converge to ψ̂"

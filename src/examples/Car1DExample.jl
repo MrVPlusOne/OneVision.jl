@@ -106,7 +106,7 @@ OneVision.control_one(
                 + bang_bang(leader.velocity, x.velocity, lf.k_v, Inf)
                 + bang_bang(leader.pos, x.pos, lf.k_x, Inf))
     end
-    CarU(acc)
+    CarU(acc) # TODO: change to pid
 end
 
 function run_example(;time_end = 20.0, freq::ℝ = 100.0, 

@@ -22,11 +22,11 @@ Due to communication need - now
 """
 function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, t::Int64, f_state, f_obs, f_msg) where {X, Z, U, N, Msg}
     s = JSON.json(Dict("states"=> x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs] )) * "\n"
-    println("sending $s")
+    #println("sending $s")
     write(conn, s)
     result = readline(conn)
     result_dict :: Dict{String, Any} = JSON.parse(result) 
-    println("recieved ", result_dict)
+    #println("recieved ", result_dict)
 
     # convert to state, obs, and msg
     x::X = f_state(result_dict)
@@ -71,7 +71,7 @@ function start_framework(world_dynamics::WorldDynamics{N},  framework::Controlle
     while true
         # start controlling
         u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
-        # limit control
+        # limit control TODO: change to c++ 
         u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
         # send and get state
         x, z, ms_recieved, t = send_and_get_states(conn, x, u, z, ms_new, controllers[car_id].τ, f_state, f_obs, f_msg)
