@@ -31,9 +31,9 @@ end
     "wheelbase between the front and rear wheels"
     l::ℝ = 0.324 # TODO: change to old default value
     "rate of convergence for v to converge to v̂"
-    k_v::ℝ = 2.0
+    k_v::ℝ = 1.0
     "rate of convergence for ψ to converge to ψ̂"
-    k_ψ::ℝ = 0.5
+    k_ψ::ℝ = 1.5
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1

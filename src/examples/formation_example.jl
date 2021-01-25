@@ -415,7 +415,7 @@ function get_framework(
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
             kp = 0.5, ki = 0.1, kd = 0.1)
     end
-    avoidance = CollisionAvoidance(scale=3.0, min_r=dy_model.l, max_r=3*dy_model.l)
+    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
@@ -431,7 +431,7 @@ function get_framework(
 
     loss_model = let 
         x_weights = SVector{N}(fill(X(x = 15, y = 15, θ = 10), N))
-        u_weights = SVector{N}(fill(U(v̂ = 5, ψ̂ = 1), N))
+        u_weights = SVector{N}(fill(U(v̂ = 5, ψ̂ = 5), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 
