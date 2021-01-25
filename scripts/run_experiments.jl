@@ -20,7 +20,7 @@ wsave(perf_path, @dict perf_tables)
 
 # load and display results
 perf_tables = wload(perf_path)[:perf_tables]
-show_performance_exps(perf_tables)
+show_performance_exps(perf_tables, datadir("processed", "performance_exps"))
 
 # generate and save results
 var_tables = run_variation_exps(num_of_runs = 10)
@@ -28,6 +28,6 @@ wsave(var_path, @dict var_tables)
 
 # load and display results
 var_tables = wload(var_path)[:var_tables]
-show_variation_exps(var_tables)
+show_variation_exps(var_tables, datadir("processed", "variation_exps"))
 
 visualize_benchmark("1D Leader Linear", default_setting(), "Local")

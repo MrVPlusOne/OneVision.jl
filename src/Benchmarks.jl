@@ -187,9 +187,10 @@ function prepare_metrics(df::AbstractDataFrame)
     df
 end
 
-function show_performance_exps(df)
+function show_performance_exps(df, out_path = nothing)
     comp_stats(vs) = mean(vs) ± std(vs)
 
+    (out_path === nothing) || mkpath(out_path)
     df = prepare_metrics(df)
     df = groupby(df, Not([:seed, :value]))
     df = combine(df, :value => comp_stats => :value)
@@ -198,9 +199,10 @@ function show_performance_exps(df)
         metric = subdf.metric[1]
         if metric == "loss-state" continue end
         println("=== Metric: $(metric) ===")
-        @_ groupby(subdf, :task) |> 
-            combine(__, [:cf, :value] => ((cfs, vs) -> (; zip(cfs, vs)...)) => AsTable) |>
-            display
+        table = @_ groupby(subdf, :task) |> 
+            combine(__, [:cf, :value] => ((cfs, vs) -> (; zip(cfs, vs)...)) => AsTable)
+        display(table)
+        (out_path === nothing) || CSV.write(joinpath(out_path, "$(metric).csv"), table)
     end
 end
 
@@ -254,7 +256,7 @@ function run_variation_exps(; num_of_runs)
     return DataFrame(all_rows)
 end
 
-function show_variation_exps(df::DataFrame)
+function show_variation_exps(df::DataFrame, out_path = nothing)
     function comp_stats(vs)
         # quart1, quart2, quart3 = quantile(vs, [0.25, 0.5, 0.75])
         (mid = mean(vs), lb = minimum(vs), ub = maximum(vs))
@@ -263,11 +265,12 @@ function show_variation_exps(df::DataFrame)
     data = prepare_metrics(df)
     data = groupby(data, Not([:seed, :value]))
     data = combine(data, :value => comp_stats => [:mid, :lb, :ub])
-    @showprogress map(draw_variation_metric, groupby(data, [:variation, :metric], sort = true))
+    (out_path === nothing) || mkpath(out_path)
+    @showprogress map(d -> draw_variation_metric(d, out_path), groupby(data, [:variation, :metric], sort = true))
     nothing
 end
 
-function draw_variation_metric(subdata)
+function draw_variation_metric(subdata, out_path)
     var_name = subdata[1, :variation]
     metric_name = subdata[1, :metric]
     # yscale = startswith(metric_name, "loss") ? :log10 : :identity
@@ -285,10 +288,16 @@ function draw_variation_metric(subdata)
         p
     end
     N = length(plots)
-    plot(plots...; 
+    plt = plot(plots...; 
         labels=string.(cf_names), legend = :outertopright, fillalpha = 0.3,
         fontsize = 10, legendfontsize = 6, titlefontsize = 10,
-        layout = (N, 1), size = (400, 250 * N)) |> display
+        dpi=300,
+        layout = (N, 1), size = (400, 250 * N)) 
+    display(plt)
+    if out_path !== nothing
+        path = joinpath(out_path, "$(var_name)-$(metric_name).png")
+        savefig(plt, path)
+    end
 end
 
 
