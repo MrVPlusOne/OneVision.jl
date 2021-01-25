@@ -129,6 +129,11 @@ function simulate(
     for t in t0:tf
         xs_read = pushpop!.(state_qs, xs_observer(xs, t))
         zs_read = pushpop!.(obs_qs, zs_observer(zs, t))
+        i = 0
+        for x in xs_read
+            println("[$i]x is $x")
+            i += 1
+        end
         # run controllers
         for i in SOneTo(N)
             x, z = xs_read[i], zs_read[i]

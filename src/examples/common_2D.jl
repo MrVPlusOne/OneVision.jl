@@ -31,9 +31,9 @@ end
     "wheelbase between the front and rear wheels"
     l::ℝ = 0.324 # TODO: change to old default value
     "rate of convergence for v to converge to v̂"
-    k_v::ℝ = 5.0*5
+    k_v::ℝ = 2.0
     "rate of convergence for ψ to converge to ψ̂"
-    k_ψ::ℝ = 10.0*1.7
+    k_ψ::ℝ = 0.5
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
@@ -143,6 +143,7 @@ function track_refpoint(
         dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
         K.kp * (p̂ - p) + ∫edt + v_p̂ 
     end
+    #print("ref pt is $p, optimal is $p̂")
     # convert `v_p` back into the control `CarU`
     d = K.ref_pos
     θ = s.θ
@@ -275,11 +276,11 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
 
     function action(id)::CarU
         (id == 1) && return zs[1].c
-
-        s = form[id]
-        (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y])
+        s = form[id] # current state
+        (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
         ξi = submap(ξ, Symbol(id))
         v_o = avoid_collision(id)
+        #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
     end
 

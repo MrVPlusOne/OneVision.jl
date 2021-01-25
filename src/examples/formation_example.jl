@@ -82,6 +82,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     end
 
     function external_control(_, t)
+        return U(v̂ = 0.0, ψ̂ = 0.0)
         (if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
         elseif t ≤ 5 * freq
@@ -316,13 +317,12 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
     end
     function parse_obs(result::Dict{String, Any}) 
         U =  CarU{ℝ}
-
         z = HVec{U, ℕ}(result["z"]["c"], result["z"]["d"])
         return z
     end
 
     function parse_msg(result::Dict{String, Any})::Each{OvMsg}
-        println("msgs are", result["msgs"])
+        #println("msgs are", result["msgs"])
         msg_array::Each{Vector{UInt8}} = result["msgs"]
         msgs::Each{OvMsg} = [deserialize_from_b_array(m) for m in msg_array] #[deserialize(msg) for msg in result["msgs"]]
         return msgs
@@ -346,7 +346,7 @@ function get_framework(
     track_config = false, )
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
-    delta_t = 1 / freq
+    delta_t = 1.0 / freq
 
     # Car dynamics parameters
     dy_model = CarDynamics(;delta_t, max_ψ = 45°)
@@ -361,7 +361,7 @@ function get_framework(
     end
 
     function external_control(x, t)
-        return U(v̂ = x.v , ψ̂ = x.ψ)
+        return U(v̂ = 0.0 , ψ̂ = 0.0)
         (if t ≤ 3 * freq
             U(v̂ = 1.0, ψ̂ = 0.0)
         elseif t ≤ 5 * freq
@@ -409,13 +409,13 @@ function get_framework(
     form_from_id(i) = formations[i]
 
     RefK = if track_config
-        ConfigTrackControl(dy_model, 1.0, 1.0, 1.0)
+        ConfigTrackControl(dy_model, 100.0, 0.0, 3.0)
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 1.0*1, ki = 1.0*20, kd = 3.0)
+            kp = 0.5, ki = 0.1, kd = 0.1)
     end
-    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=3*dy_model.l)
+    avoidance = CollisionAvoidance(scale=3.0, min_r=dy_model.l, max_r=3*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
@@ -430,8 +430,8 @@ function get_framework(
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 100, y = 100, θ = 1), N))
-        u_weights = SVector{N}(fill(U(v̂ = 1*5, ψ̂ = 10), N))
+        x_weights = SVector{N}(fill(X(x = 15, y = 15, θ = 10), N))
+        u_weights = SVector{N}(fill(U(v̂ = 5, ψ̂ = 1), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 

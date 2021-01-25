@@ -59,7 +59,7 @@ function start_framework(world_dynamics::WorldDynamics{N},  framework::Controlle
     init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, freq, f_state, f_obs, f_msg) where {X, Z, U, Msg, Log, N}
     t0::𝕋 = 1
     t = t0
-    dt = 1.0/freq
+    dt = 1#1.0/freq
     conn = init_socket(port_number)
     # unzip the initial states
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
@@ -67,8 +67,10 @@ function start_framework(world_dynamics::WorldDynamics{N},  framework::Controlle
     ms_recieved = first(msg_qs[car_id]) # we wont be using the queue impl as delay is not handled here 
     x, z, u = xs[car_id], zs[car_id], us[car_id]
 
+    #fp = open("car$car_id.csv", )
     # start the looping process
     while true
+        #println("[$t], x: $x, z:$z, dt:$dt")
         # start controlling
         u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
         # limit control TODO: change to c++ 
