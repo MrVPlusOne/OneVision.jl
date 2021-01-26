@@ -4,6 +4,7 @@ export °, rotation2D, to_matrix
 export HVec, h_vec_from_dict
 export @kwdef, @_, @set
 export serialize_to_b_array, deserialize_from_b_array
+export restrict
 
 import DataStructures
 
@@ -299,4 +300,8 @@ end
 function deserialize_from_b_array(s::Vector{UInt8})
     read_iob = IOBuffer(s)
     return deserialize(read_iob)
+end
+
+function restrict(theta)
+    return rem2pi(theta, RoundNearest)
 end

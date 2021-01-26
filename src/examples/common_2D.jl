@@ -9,7 +9,14 @@
     v::R = 0.0
     "steering angle"
     ψ::R = 0.0
+    ##CarX(x, y, θ, v=0.0, ψ = 0.0) = new{typeof(x)}(x, y, θ, v, ψ)
+    function CarX{R}(;x::R, y::R, θ::R,v::R = 0.0, ψ::R =0.0) where {R}
+        new{R}(x, y, restrict(θ),v =  v, ψ = restrict(ψ))
+    end
 end
+
+CarX{R}(x::R, y::R, θ::R, v::R = 0.0, ψ::R =0.0) where {R} = CarX{R}(x, y, restrict(θ), v, restrict(ψ))
+#CarX{R}(x::R, y::R, θ::R) where {R} = CarX{R}(x, y, restrict(θ), 0.0 , 0.0)
 
 get_pos(s::CarX) = @SVector[s.x, s.y]
 
@@ -18,6 +25,7 @@ get_pos(s::CarX) = @SVector[s.x, s.y]
     v̂::R = 0.0
     "desired steering angle"
     ψ̂::R = 0.0
+    
 end
 
 # TODO: fine-tune these parameters
@@ -141,7 +149,7 @@ function track_refpoint(
         Δt = K.ctrl_interval
         ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
         dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
-        K.kp * (p̂ - p) + ∫edt + v_p̂ 
+        K.kp * (p̂ - p) + ∫edt + K.kd*v_p̂ 
     end
     #print("ref pt is $p, optimal is $p̂")
     # convert `v_p` back into the control `CarU`
@@ -266,7 +274,7 @@ end
 function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, xs, zs, t)
     formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
     form = ctrl.formation(xs, zs, t)
-
+    
     N = length(xs)
     function avoid_collision(i)
         ca = ctrl.avoidance
@@ -275,13 +283,19 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
     end
 
     function action(id)::CarU
+        #return CarU(0.0, 0.0)
         (id == 1) && return zs[1].c
-        s = form[id] # current state
+        #xs[id].θ = restrict(xs[id].θ)
+        s = form[id] # initial state
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
         ξi = submap(ξ, Symbol(id))
         v_o = avoid_collision(id)
+        
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
-        track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        u = track_refpoint(ctrl.K, ξi, (p, v_p), xs[id], t)
+        println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
+        return u
     end
 
     action

@@ -112,7 +112,7 @@ function formation_example(;time_end = 20.0, freq = 100.0,
     H = 20
     ΔT = delays_model.ΔT
 
-    N = 4
+    N = 2 # number of car
     triangle_formation = let
         l = 0.8
         Δϕ = 360° / (N-1) 
@@ -393,13 +393,17 @@ function get_framework(
 
     N::Int64 = fleet_size
     triangle_formation = let
-        l = 0.8
+        l = 1.0
         Δϕ = 360° / (N-1) 
-        circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0) for i in 1:N-1]
+        circle = Vector{X}()
+        for i in 1:N-1
+            cur = X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0)
+            append!(circle, cur)
+        end
         [[zero(X)]; circle]
     end
     vertical_formation = let
-        l = 0.6
+        l = 1.5
         leader_idx = round_ceil(N/2)
         line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
@@ -413,7 +417,7 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 0.5, ki = 0.1, kd = 0.1)
+            kp = 1.5, ki = 0.1, kd = 0.3)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
