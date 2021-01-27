@@ -86,6 +86,7 @@ function plan_trajectory(
     end
 
     @assert (obj = Optim.minimum(res)) ≥ -sqrt(eps()) "negative objective: $(obj)"
+    #obj = Optim.minimum(res)
     û, obj
 end
 

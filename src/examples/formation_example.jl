@@ -395,17 +395,13 @@ function get_framework(
     triangle_formation = let
         l = 1.0
         Δϕ = 360° / (N-1) 
-        circle = Vector{X}()
-        for i in 1:N-1
-            cur = X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0)
-            append!(circle, cur)
-        end
+        circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0) for i in 1:N-1]
         [[zero(X)]; circle]
     end
     vertical_formation = let
         l = 1.5
         leader_idx = round_ceil(N/2)
-        line = [X(x = l * (i - leader_idx), y = 0, θ = 0) for i in 1:N]
+        line = [X(x = l * (i - leader_idx), y = 0.0, θ = 0.0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
     end
 
@@ -417,7 +413,7 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 1.5, ki = 0.1, kd = 0.3)
+            kp = 3.5, ki = 0.1, kd = 0.3)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
@@ -434,7 +430,7 @@ function get_framework(
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 15, y = 15, θ = 10), N))
+        x_weights = SVector{N}(fill(X(x = 15.0, y = 15.0, θ = 10.0), N))
         u_weights = SVector{N}(fill(U(v̂ = 5, ψ̂ = 5), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
@@ -445,6 +441,7 @@ function get_framework(
             |> WorldDynamics)
 
     println("init status is $init")
+    #exit(0)
     return framework, world, init
 end
 

@@ -10,12 +10,16 @@
     "steering angle"
     ψ::R = 0.0
     ##CarX(x, y, θ, v=0.0, ψ = 0.0) = new{typeof(x)}(x, y, θ, v, ψ)
-    function CarX{R}(;x::R, y::R, θ::R,v::R = 0.0, ψ::R =0.0) where {R}
-        new{R}(x, y, restrict(θ),v =  v, ψ = restrict(ψ))
-    end
+    #function CarX{R}(;x::R, y::R, θ::R,v::R = 0.0, ψ::R =0.0) where {R}
+    #    new{R}(x, y, restrict(θ), v, restrict(ψ))
+    #end
 end
 
-CarX{R}(x::R, y::R, θ::R, v::R = 0.0, ψ::R =0.0) where {R} = CarX{R}(x, y, restrict(θ), v, restrict(ψ))
+#function CarX{R}(;x::R, y::R, θ::R,v::R = 0.0, ψ::R =0.0) where {R}
+#    CarX{R}(x, y, restrict(θ), v, restrict(ψ))
+#end
+
+#CarX{R}(x::R, y::R, θ::R, v::R = 0.0, ψ::R =0.0) where {R} = CarX{R}(x, y, restrict(θ), v, restrict(ψ))
 #CarX{R}(x::R, y::R, θ::R) where {R} = CarX{R}(x, y, restrict(θ), 0.0 , 0.0)
 
 get_pos(s::CarX) = @SVector[s.x, s.y]
@@ -73,13 +77,17 @@ end
 @inline function sys_derivates(dy::CarDynamics, x::X, u)::X where X
     x, y, θ, v, ψ = x
     v̂, ψ̂ = u
-
+    #v = restrict(v)
+    ψ̂ = restrict(ψ̂ )
+    θ = restrict(θ)
+    ψ = restrict(ψ)
     ẋ = cos(θ) * v
     ẏ = sin(θ) * v
     θ̇ = ω_from_v_ψ(v, ψ, dy.l)
     v̇ = dy.k_v * (v̂ - v)
     ψ̇ = dy.k_ψ * (ψ̂ - ψ)
-    
+    #ψ̇  = restrict(ψ̇ )
+    #θ̇  = restrict(θ̇ )
     X(ẋ, ẏ, θ̇, v̇, ψ̇)
 end
 
