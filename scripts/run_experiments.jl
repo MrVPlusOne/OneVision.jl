@@ -28,6 +28,6 @@ wsave(var_path, @dict var_tables)
 
 # load and display results
 var_tables = wload(var_path)[:var_tables]
-show_variation_exps(var_tables, datadir("processed", "variation_exps"))
+show_variation_exps(var_tables, only_task = "2D Formation Switching") #, datadir("processed", "variation_exps"))
 
-visualize_benchmark("1D Leader Linear", default_setting(), "Local")
+visualize_benchmark("2D Formation Switching", default_setting(), "OneVision")

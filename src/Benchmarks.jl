@@ -16,6 +16,7 @@ using Plots
 using Random
 using Statistics
 using Measurements
+using Printf
 
 function with_args(f; kws...)
     (args...; kws2...) -> f(args...; kws2..., kws...)
@@ -63,7 +64,7 @@ variation_settings() = [
         for x in [1, 5, 15, 30, 50]]
     "horizon" =>
         [x => @set defaults.H = x
-        for x in [1, 5, 10, 20, 30]]
+        for x in [1, 2, 4, 7, 10, 15, 20, 30]]
     "model error" =>
         [x => @set defaults.model_error = x
         for x in [0.0, 0.1, 0.3, 0.6, 1.0]]
@@ -75,21 +76,6 @@ basic_settings() = [
     "No Delays" =>  @set defaults.delays = DelayModel(;obs = 0, act = 0, com = 1, ΔT = 5)
 ]
 
-
-function run_setting_old(setting)
-    metric_tables = Dict{String, Any}()
-    for (name, ex) in scenarios
-        foreach(CFs) do (cf_str, CF)
-            loss, metrics = ex(;plot_result = false, CF, setting)
-            metrics["loss"] = sum(loss) / setting.freq
-            for (metric, v) in metrics
-                rows = get!(metric_tables, metric, [])
-                push!(rows, (Task = name, CF = cf_str, value = v))
-            end
-        end
-    end
-    Dict(k => rearrange_result_table(DataFrame(v)) for (k, v) in metric_tables)
-end
 
 function run_setting(setting, seed)
     rows = []
@@ -130,21 +116,6 @@ function display_table(rows, name)
     display(rows)
 end
 
-function run_performance_exps()
-    settings = basic_settings()
-    num_tasks = length(settings)
-    prog = Progress(num_tasks, 0.1, "Running benchmarks...")
-
-    tables = Dict(ThreadsX.map(settings) do (setname, setting)
-        dfs = run_setting(setting)
-        next!(prog)
-        setname => dfs
-    end)
-    finish!(prog)
-    show_performance_exps(tables)
-    return tables
-end
-
 """
 Generates `num` random seeds that are unlikely to be correlated.
 """
@@ -177,18 +148,22 @@ function run_performance_exps(; num_of_runs)
 end
 
 """
-Convert "loss" into "loss sqrt" and drop "loss-state".
+Convert "loss" into "loss sqrt" and drop "loss-state". 
+Rename "avg deviation" to "avg distance".
 """
 function prepare_metrics(df::AbstractDataFrame)
     df = filter(r -> r.metric != "loss-state", df)
     rows = df.metric .== "loss"
     df[rows, :value] = log10.(df[rows, :value])
     df[rows, :metric] .= Ref("log loss")
+    df[df.metric .== "avg deviation", :metric] .= "avg distance"
+    # df[df.metric .== "avg distance", :metric] .= "avg deviation"
     df
 end
 
 function show_performance_exps(df, out_path = nothing)
-    comp_stats(vs) = mean(vs) ± std(vs)
+    comp_stats(vs) = mean(vs) # ± std(vs)
+    display_num(v) = if v isa AbstractFloat; @sprintf("%.3f", v) else v end
 
     (out_path === nothing) || mkpath(out_path)
     df = prepare_metrics(df)
@@ -202,7 +177,9 @@ function show_performance_exps(df, out_path = nothing)
         table = @_ groupby(subdf, :task) |> 
             combine(__, [:cf, :value] => ((cfs, vs) -> (; zip(cfs, vs)...)) => AsTable)
         display(table)
-        (out_path === nothing) || CSV.write(joinpath(out_path, "$(metric).csv"), table)
+        (out_path === nothing) || 
+            CSV.write(joinpath(out_path, "$(metric).csv"), table; 
+                transform = (_, val) -> display_num(val))
     end
 end
 
@@ -256,7 +233,7 @@ function run_variation_exps(; num_of_runs)
     return DataFrame(all_rows)
 end
 
-function show_variation_exps(df::DataFrame, out_path = nothing)
+function show_variation_exps(df::DataFrame; out_path = nothing, only_task = nothing)
     function comp_stats(vs)
         # quart1, quart2, quart3 = quantile(vs, [0.25, 0.5, 0.75])
         (mid = mean(vs), lb = minimum(vs), ub = maximum(vs))
@@ -266,17 +243,19 @@ function show_variation_exps(df::DataFrame, out_path = nothing)
     data = groupby(data, Not([:seed, :value]))
     data = combine(data, :value => comp_stats => [:mid, :lb, :ub])
     (out_path === nothing) || mkpath(out_path)
-    @showprogress map(d -> draw_variation_metric(d, out_path), groupby(data, [:variation, :metric], sort = true))
+    @showprogress map(d -> draw_variation_metric(d; out_path, only_task), groupby(data, [:variation, :metric], sort = true))
     nothing
 end
 
-function draw_variation_metric(subdata, out_path)
+function draw_variation_metric(subdata; out_path = nothing, only_task = nothing)
     var_name = subdata[1, :variation]
     metric_name = subdata[1, :metric]
     # yscale = startswith(metric_name, "loss") ? :log10 : :identity
     cf_names = hcat(first.(CFs)...)
-    plots = map(groupby(subdata, :task)) do taskdata
+    plots = []
+    for taskdata in groupby(subdata, :task)
         task_name = taskdata.task[1]
+        only_task === nothing || only_task == task_name || continue
         p = plot(;xlabel = var_name, ylabel = metric_name)
         for cfname in cf_names
             cfdata = filter(x -> x.cf == cfname, taskdata)
@@ -285,7 +264,7 @@ function draw_variation_metric(subdata, out_path)
                 marker = true, markersize = 3,
                 ribbon = (cfdata.mid .- cfdata.lb, cfdata.ub .- cfdata.mid))
         end
-        p
+        push!(plots, p)
     end
     N = length(plots)
     plt = plot(plots...; 
