@@ -5,7 +5,7 @@ function plot_formation(
 
     ax_traj = layout[1,1] = LAxis(
         scene, title = "Trajectories", aspect = DataAspect(), 
-        backgroundcolor = RGBf0(0.98, 0.98, 0.98))
+        backgroundcolor = RGBf0(1,1,1))
 
     times = data.times
     time_ls = labelslider!(
@@ -16,32 +16,41 @@ function plot_formation(
 
     N = size(data.values, 2)
     colors = [get(ColorSchemes.Spectral_10, i/N) for i in 1:N]
+
+    function plot_snapshot(t)
+        # draw cars
+        for id in 1:N
+            car = @lift let 
+                x, y, θ = map(l -> data[l][$t,id], ("x", "y", "θ"))
+                car_triangle(x, y, θ)
+            end
+            poly!(ax_traj, car; color = colors[id], strokecolor=:black, strokewidth=2)
+        end
+        # draw ref points
+        refpoints = @lift let
+            x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
+            leader = CarX(;x, y, θ, ψ, v)
+            @_ (formation_at_t($t) 
+                |> map(ref_point(ctrl.K, _),__) 
+                |> map(to_formation_frame(ctrl, leader), __))
+        end
+        points = @lift (x -> Point2f0(x[1])).($refpoints)
+        directions = @lift (x -> Point2f0(x[2])).($refpoints)
+        arrows!(ax_traj, points, directions; 
+            linecolor=:red, arrowcolor=:red, lengthscale=0.15, arrowsize=0.10, linewidth=1)
+        scatter!(ax_traj, points; color=:red)
+    end
+    
     # draw trajectories
     for id in 1:N
         xs, ys, θs = map(l -> data[l][:,id], ("x", "y", "θ"))
-        lines!(ax_traj, xs, ys; color=colors[id], linewidth=3)
+        lines!(ax_traj, xs, ys; color=colors[id], linewidth=4)
     end
-    # draw cars
-    for id in 1:N
-        car = @lift let 
-            x, y, θ = map(l -> data[l][$t,id], ("x", "y", "θ"))
-            car_triangle(x, y, θ)
-        end
-        poly!(ax_traj, car; color = colors[id], strokecolor=:black, strokewidth=2)
-    end
-    # draw ref points
-    refpoints = @lift let
-        x, y, θ, ψ, v = map(l -> data[l][$t,1], ("x", "y", "θ", "ψ", "v"))
-        leader = CarX(;x, y, θ, ψ, v)
-        @_ (formation_at_t($t) 
-            |> map(ref_point(ctrl.K, _),__) 
-            |> map(to_formation_frame(ctrl, leader), __))
-    end
-    points = @lift (x -> Point2f0(x[1])).($refpoints)
-    directions = @lift (x -> Point2f0(x[2])).($refpoints)
-    arrows!(ax_traj, points, directions; 
-        linecolor=:red, arrowcolor=:red, lengthscale=0.2, arrowsize=0.1)
-    scatter!(ax_traj, points; color=:red)
+    # plot current snapshot
+    plot_snapshot(t)
+    # plot additional snapshots (used for paper figures)
+    interesting_times = [] # [386, 833, 963, 1254, 1610]
+    foreach(plot_snapshot, Observable.(interesting_times))
 
     scene
 end
@@ -184,7 +193,7 @@ function formation_example(;
         RefK, dy_model, avoidance)
     
     init = let 
-        formation = rotate_formation(form_from_id(1), 0°)
+        formation = rotate_formation(form_from_id(1), 90°)
         map(1:N) do i 
             x = formation[i]
             x, HVec(zero(U), 1), zero(U)

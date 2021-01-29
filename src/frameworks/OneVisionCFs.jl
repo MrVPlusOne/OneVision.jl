@@ -201,7 +201,7 @@ function OneVision.control!(
     end
 
     if should_log 
-        π.logs[τ - Tx - Tc] = OvLog(to_array.((ũ, x̃, z̃))..., δx, zt)
+        π.logs[π.τ] = OvLog(to_array.((ũ, x̃, z̃))..., x, z)
     end
 
     π.τ += 1
