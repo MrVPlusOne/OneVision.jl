@@ -345,13 +345,13 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 0, act = 0, com = 5, ΔT = 1)
+    delays = DelayModel(obs = 1, act = 1, com = 10, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
 
     # Car dynamics parameters
-    dy_model = CarDynamics(;delta_t)
+    dy_model = CarDynamics(;delta_t, max_v = 2.0)
 
     delays_model = delays
     H = 20

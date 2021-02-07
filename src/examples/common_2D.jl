@@ -46,6 +46,11 @@ end
     k_v::ℝ = 1.0
     "rate of convergence for ψ to converge to ψ̂"
     k_ψ::ℝ = 1.5
+    "maximum percentage for v to converge to v̂"
+    k_max_v::ℝ = 0.1
+    "rate of convergence for ψ to converge to ψ̂"
+    k_max_ψ::ℝ = 0.1
+
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
@@ -86,6 +91,15 @@ end
     θ̇ = ω_from_v_ψ(v, ψ, dy.l)
     v̇ = dy.k_v * (v̂ - v)
     ψ̇ = dy.k_ψ * (ψ̂ - ψ)
+    
+    # bounds the variables
+    N = dy.integrator_samples
+    v̇_min, v̂_max = v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
+    v̇ = min(v̇, v̂_max)
+    v̇ = max(v̇, v̇_min)
+    ψ̇_min, ψ̇_max= ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
+    ψ̇ = min(ψ̇, ψ̇_max)
+    ψ̇ = max(ψ̇, ψ̇_min)
     #ψ̇  = restrict(ψ̇ )
     #θ̇  = restrict(θ̇ )
     X(ẋ, ẏ, θ̇, v̇, ψ̇)

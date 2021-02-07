@@ -18,7 +18,7 @@ struct TrajPlanningProblem{H,ΔT,X,U,Dy <: SysDynamics}
 end
 
 TrajPlanningProblem(H::ℕ, ΔT::𝕋, dy, x_weights, u_weights;
-    optim_options = Optim.Options(iterations = 10000, time_limit=10.0)) =
+    optim_options = Optim.Options(iterations = 1000)) =
     TrajPlanningProblem(Val(H), Val(ΔT), dy, x_weights, u_weights,
         optim_options, Ref{Any}(missing))
 
