@@ -302,7 +302,7 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p), xs[id], t)
-        println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
+        #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u
     end
 

@@ -304,7 +304,7 @@ Open loop simulation
 function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
     N::Int64 = fleet_size
     #init_status = get_initial_states(N)
-    framework, world_dynamics, init_status = get_framework(car_id, fleet_size, freq=freq)
+    framework, init_status = get_framework(car_id, fleet_size, freq)
 
     port::Integer = car_id + 5000
 
@@ -321,14 +321,15 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
         return z
     end
 
-    function parse_msg(result::Dict{String, Any})::Each{OvMsg}
+    function parse_msg(result::Dict{String, Any})::Pair{Each{ℕ}, Each{OvMsg}}
         #println("msgs are", result["msgs"])
         msg_array::Each{Vector{UInt8}} = result["msgs"]
+        msg_senders::Each{ℕ} = result["msgs_senders"]
         msgs::Each{OvMsg} = [deserialize_from_b_array(m) for m in msg_array] #[deserialize(msg) for msg in result["msgs"]]
-        return msgs
+        return Pair(msg_senders, msgs)
     end
 
-    start_framework(world_dynamics, framework, init_status, car_id, port, fleet_size, freq, parse_state, parse_obs, parse_msg)
+    start_framework(framework, init_status, car_id, port, fleet_size, freq, parse_state, parse_obs, parse_msg)
 end
 
 """
@@ -338,13 +339,13 @@ return framework
 function get_framework(    
     car_id :: Integer,
     fleet_size ::Integer,
+    freq :: Int32,
     CF::CFName = onevision_cf,
     switch_formation = false,
     track_config = false, 
 )
 
-    freq = 50.0, 
-    delays = DelayModel(obs = 2, act = 1, com = 3, ΔT = 1)
+    delays = DelayModel(obs = 0, act = 0, com = 5, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
@@ -404,7 +405,7 @@ function get_framework(
 
     println("init status is $init")
     #exit(0)
-    return framework, nothing, init
+    return framework,  init
 end
 
 # TODO: change to distributed setting
