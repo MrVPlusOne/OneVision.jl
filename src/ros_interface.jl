@@ -80,7 +80,7 @@ function create_cache_from_vec(msg_qss::FixedQueue{Each{Msg}}, fleet_size::Int64
 end
 function add_to_cache!(msg_ds::Dict{𝕋,Msg}, msg::Msg) where Msg
     t = msg.δx.time
-    println("adding to cache time: $t")
+    @debug "adding to cache time: $t"
     @assert t<10 || (t>=10 && t ∉ keys(msg_ds))
     msg_ds[t] = msg
 end
@@ -102,7 +102,7 @@ Add a message array with arbitrary timestep and car id to the cache
 """
 function add_vec_to_cache!(msg_ds_arr::AbstractVector{Dict{𝕋,Msg}}, msg_id:: AbstractVector{ℕ}, msg_vs::AbstractVector{Msg}) where Msg
     for (from, msg) in zip(msg_id, msg_vs)
-        println("recieved message from $from")
+        @debug "recieved message from $from"
         add_to_cache!(msg_ds_arr[from], msg)
     end
 end
@@ -152,22 +152,24 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         controller_t = controllers[car_id].τ
         
         ms_recieved = get_vec_from_cache(msg_ds_arr, t_msg)
+        @assert length(ms_recieved) == fleet_size
         # println("[$t], x: $x, z:$z, dt:$dt")
         # start controlling
         u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
         for (i, c) in enumerate(controllers)
-            print("[id:$i] ")
+            #print("[id:$i] ")
             log_str = "[id:$i] "
             for (k, v) in c.logs
                 log_str = log_str * "key: $k, value: $v"
-                print("key: $k, value: $v")
+                #@debug "key: $k, value: $v"
             end
-            println()
+            #println()
             write(fp_log, log_str)
         end
         # limit control TODO: change to c++ 
         # u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
         # send and get state
+        @debug "[$t], state is $x, action is $u"
         x, z, msg_recieved_pair, t_diff = send_and_get_states(conn, x, u, z, ms_new, t, f_state, f_obs, f_msg)
 
         add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second)
@@ -175,8 +177,7 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         prev_t = t
         t = t + dt#𝕋(round(t_diff/freq))
         t_msg = t_msg + dt #t + t_msg_offset #+= dt
-        println("current msg time is $t_msg, offset is $t_msg_offset recieved msg time is $(msg_recieved_pair.second[1].δx.time) new msg time is $(ms_new[1].δx.time), $(ms_new[2].δx.time)")
-
+        @debug "current msg time is $t_msg, offset is $t_msg_offset recieved msg time is $(msg_recieved_pair.second[1].δx.time) new msg time is $(ms_new[1].δx.time), $(ms_new[2].δx.time)"
     end
 
     

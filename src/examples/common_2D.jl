@@ -46,17 +46,17 @@ end
     k_v::ℝ = 1.0
     "rate of convergence for ψ to converge to ψ̂"
     k_ψ::ℝ = 1.5
-    "maximum percentage for v to converge to v̂"
-    k_max_v::ℝ = 0.1
-    "rate of convergence for ψ to converge to ψ̂"
-    k_max_ψ::ℝ = 0.1
+    "maximum linear acceleration/deceleration per frequency"
+    k_max_a::ℝ = 0.1
+    "maximum angular acceleration/deceleration per frequency"
+    k_max_ω::ℝ = 1.5°
 
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
 end
 
-ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l / v)
+ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l, v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
@@ -90,18 +90,14 @@ end
     ẏ = sin(θ) * v
     θ̇ = ω_from_v_ψ(v, ψ, dy.l)
     v̇ = dy.k_v * (v̂ - v)
-    ψ̇ = dy.k_ψ * (ψ̂ - ψ)
+    ψ̇ = dy.k_ψ * restrict(ψ̂ - ψ)
     
     # bounds the variables
     N = dy.integrator_samples
-    v̇_min, v̂_max = v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
-    v̇ = min(v̇, v̂_max)
-    v̇ = max(v̇, v̇_min)
-    ψ̇_min, ψ̇_max= ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
-    ψ̇ = min(ψ̇, ψ̇_max)
-    ψ̇ = max(ψ̇, ψ̇_min)
-    #ψ̇  = restrict(ψ̇ )
-    #θ̇  = restrict(θ̇ )
+    v̇_min, v̂_max = -dy.k_max_a/N, dy.k_max_a/N#v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
+    v̇ = clamp(v̇, v̇_min, v̂_max)
+    ψ̇_min, ψ̇_max= -dy.k_max_ω/N, dy.k_max_ω/N#ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
+    ψ̇ = clamp(ψ̇, ψ̇_min, ψ̇_max)
     X(ẋ, ẏ, θ̇, v̇, ψ̇)
 end
 
@@ -312,7 +308,7 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
         ξi = submap(ξ, Symbol(id))
         v_o = avoid_collision(id)
-        
+        @debug "[$t] states are $xs\n refvel is $v_p actions are:$zs"
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p), xs[id], t)

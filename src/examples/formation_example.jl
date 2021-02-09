@@ -345,7 +345,7 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 1, act = 1, com = 10, ΔT = 1)
+    delays = DelayModel(obs = 2, act = 1, com = 10, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
