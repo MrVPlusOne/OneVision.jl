@@ -40,10 +40,11 @@ everything should work out of the box.
 #### arm modification (jetson tx2 specific)
 Due to package compatibiliies, some package will have to be installed in an alternative manner. Note that the following are only validated on Jetson TX2 with 18.04 - your milage may vary. 
 
-OSQP:
+GR
 ```
-] add https://github.com/TongruiLi/OSQP.jl
+] add https://github.com/TongruiLi/GR.jl
 ```
+At the time of writing the latest version on github (0.54.0) works by default on the jetson computers. However, the version that julia acquired outdates the github version - we assume that this modfication will not be needed when julia updates.    
 
 
 
