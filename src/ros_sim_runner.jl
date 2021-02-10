@@ -59,7 +59,7 @@ function run_open_loop(car_id::Integer, fleet_size::Integer, freq::Int32)
     @assert freq > 0
     #@assert fleet_size > 0
     #Car1DExample.run_open_example(car_id, fleet_size)
-    @assert fleet_size > 1 
+    @assert fleet_size >= 1 
     Car2DExamples.run_open_example(car_id, fleet_size, freq)
 end
 end # module ROS_SIM_RUNNER

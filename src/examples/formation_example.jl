@@ -301,9 +301,11 @@ TODO: change to file operation
 """
 Open loop simulation
 """
+
 function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
     N::Int64 = fleet_size
     #init_status = get_initial_states(N)
+    println("in open loop")
     framework, init_status = get_framework(car_id, fleet_size, freq)
 
     port::Integer = car_id + 5000
@@ -358,12 +360,33 @@ function get_framework(
     ΔT = delays_model.ΔT
 
     N::Int64 = fleet_size
-    triangle_formation = let
-        l = 1.0
-        Δϕ = 360° / (N-1) 
-        circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0) for i in 1:N-1]
-        [[zero(X)]; circle]
+
+    init_dir = "/home/strawberry/controllers/one_vision_harness/init_status/"
+    init = Each{Tuple{X, Z, U}}()
+    for i in 1:fleet_size
+        open(init_dir * "init_status_$i") do io
+            x = parse(ℝ, readline(io))
+            y = parse(ℝ, readline(io))
+            θ = parse(ℝ, readline(io))
+            v = parse(ℝ, readline(io))
+            s = parse(ℝ, readline(io))
+            i_s = (X(x, y, θ, v, s), Z(U(0.0, 0.0), 1), U(0.0, 0.0))
+            @assert typeof(i_s) == Tuple{X, Z, U}
+            push!(init,  (X(x, y, θ, v, s), Z(U(0.0, 0.0), 1), U(0.0, 0.0)))
+        end;
     end
+    println("init status read")
+    triangle_formation = let
+        if(N == 1)
+            [[zero(X)]; []]
+        else
+            l = 1.0
+            Δϕ = 360° / (N-1) 
+            circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0) for i in 1:N-1]
+            [[zero(X)]; circle]
+        end
+    end
+    println("triangle formation created")
     vertical_formation = let
         l = 1.5
         leader_idx = round_ceil(N/2)
@@ -381,17 +404,12 @@ function get_framework(
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
             kp = 3.5, ki = 0.1, kd = 0.3)
     end
+    println("ref point created")
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
-    init = let 
-        formation = rotate_formation(form_from_id(1), 0°)
-        map(1:N) do i 
-            x = formation[i]
-            x, HVec(zero(U), 1), zero(U)
-        end
-    end
+    println("central ctrl created")
 
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
