@@ -6,7 +6,7 @@ using OneVision: ℝ, 𝕋, ℕ, @kwdef, @unpack, @asserteq
 using OneVision.Examples
 using Random
 using StaticArrays
-using Plots
+#using Plots
 using Statistics: mean
 
 import OneVision

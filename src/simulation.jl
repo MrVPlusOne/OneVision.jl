@@ -1,6 +1,6 @@
 export simulate, TrajectoryData, visualize
 
-import Plots
+#import Plots
 using Makie
 using AbstractPlotting.MakieLayout
 using StaticArrays
@@ -35,6 +35,12 @@ one for each component of the state vector.
 """
 function visualize(
     result::TrajectoryData; delta_t = nothing, loss = nothing,
+)::Nothing
+end
+
+#=
+function visualize(
+    result::TrajectoryData; delta_t = nothing, loss = nothing,
 )::Plots.Plot
     if delta_t === nothing
         times = result.times
@@ -67,6 +73,7 @@ function visualize(
     Plots.plotlyjs()
     Plots.plot(ps..., layout=(length(ps), 1), size=(500, length(ps) * 200), legend=false)
 end
+=#
 
 function shorten_queue(q, len)
     @assert(len ≤ length(q), 

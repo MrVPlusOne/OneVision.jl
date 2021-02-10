@@ -1,8 +1,8 @@
 pkg_list = [
     :BenchmarkTools,
     :StaticArrays,
-    :Plots,
-    :PlotlyJS,
+    #:Plots,
+    #:PlotlyJS,
     :Measures,
     :QuadGK,
     :Unrolled,
