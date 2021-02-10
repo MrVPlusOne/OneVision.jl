@@ -361,7 +361,7 @@ function get_framework(
 
     N::Int64 = fleet_size
 
-    init_dir = "/home/strawberry/controllers/one_vision_harness/init_status/"
+    init_dir = "/home/amrl_user/controllers/one_vision_harness/init_status/"
     init = Each{Tuple{X, Z, U}}()
     for i in 1:fleet_size
         open(init_dir * "init_status_$i") do io
