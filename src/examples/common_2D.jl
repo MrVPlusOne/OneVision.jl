@@ -45,11 +45,11 @@ end
     "rate of convergence for v to converge to v̂"
     k_v::ℝ = 1.0
     "rate of convergence for ψ to converge to ψ̂"
-    k_ψ::ℝ = 1.5
+    k_ψ::ℝ = 1.0
     "maximum linear acceleration/deceleration per frequency"
-    k_max_a::ℝ = 0.1
+    k_max_a::ℝ = 0.25
     "maximum angular acceleration/deceleration per frequency"
-    k_max_ω::ℝ = 1.5°
+    k_max_ω::ℝ = 0.1°
 
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x

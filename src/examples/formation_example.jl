@@ -347,7 +347,7 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 2, act = 1, com = 10, ΔT = 1)
+    delays = DelayModel(obs = 1, act = 1, com = 5, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
@@ -402,7 +402,7 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 3.5, ki = 0.1, kd = 0.3)
+            kp = 2.5, ki = 0.0, kd = 0.3)
     end
     println("ref point created")
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
@@ -414,8 +414,8 @@ function get_framework(
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 15.0, y = 15.0, θ = 10.0), N))
-        u_weights = SVector{N}(fill(U(v̂ = 5, ψ̂ = 5), N))
+        x_weights = SVector{N}(fill(X(x = 3.0, y = 3.0, θ = 0.5), N))
+        u_weights = SVector{N}(fill(U(v̂ = 2, ψ̂ = 3.0), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 
