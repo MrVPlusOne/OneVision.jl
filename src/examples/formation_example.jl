@@ -302,7 +302,7 @@ TODO: change to file operation
 Open loop simulation
 """
 
-function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
+function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, preheat::Bool)
     N::Int64 = fleet_size
     #init_status = get_initial_states(N)
     println("in open loop")
@@ -331,7 +331,7 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32)
         return Pair(msg_senders, msgs)
     end
 
-    start_framework(framework, init_status, car_id, port, fleet_size, freq, parse_state, parse_obs, parse_msg)
+    start_framework(framework, init_status, car_id, port, fleet_size, freq, preheat, parse_state, parse_obs, parse_msg)
 end
 
 """
@@ -361,7 +361,7 @@ function get_framework(
 
     N::Int64 = fleet_size
 
-    init_dir = "/home/amrl_user/controllers/one_vision_harness/init_status/"
+    init_dir = homedir() * "/controllers/one_vision_harness/init_status/"
     init = Each{Tuple{X, Z, U}}()
     for i in 1:fleet_size
         open(init_dir * "init_status_$i") do io

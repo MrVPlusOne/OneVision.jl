@@ -120,7 +120,7 @@ end
 This function starts the distributed process.
 """
 function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log}, 
-    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, freq, f_state, f_obs, f_msg) where {X,Z,U,Msg,Log}
+    init_status::Each{Tuple{X,Z,U}}, car_id::Integer, port_number::Integer, fleet_size::Integer, freq, preheat, f_state, f_obs, f_msg) where {X,Z,U,Msg,Log}
     t0::𝕋 = 1
 
     dt = 1# 1.0/freq
@@ -178,12 +178,16 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         t = t + dt#𝕋(round(t_diff/freq))
         t_msg = t_msg + dt #t + t_msg_offset #+= dt
         @debug "current msg time is $t_msg, offset is $t_msg_offset recieved msg time is $(msg_recieved_pair.second[1].δx.time) new msg time is $(ms_new[1].δx.time), $(ms_new[2].δx.time)"
+        if preheat
+            break
+        end
     end
 
     
 
     # initialize the controller framework
     # framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
-
+    # stops stuff
+    close(conn)
 
 end

@@ -19,6 +19,10 @@ function parse_commandline()
             help = "frequency of controller"
             arg_type = Int32
             required = true
+        "--preheat"
+            help = "true to allow ahead of time compilation"
+            arg_type = Bool
+            required = true
     end
 
     return parse_args(s)
@@ -33,7 +37,8 @@ function run()
     car_id::Int32 = parsed_args["car_id"]
     fleet_size::Int32 = parsed_args["fleet_size"]
     freq::Int32 = parsed_args["freq"]
-    run_open_loop(car_id, fleet_size, freq)
+    preheat::Bool = parsed_args["preheat"]
+    run_open_loop(car_id, fleet_size, freq, preheat)
 end
 
 run()
