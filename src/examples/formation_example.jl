@@ -347,7 +347,7 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 1, act = 2, com = 15, ΔT = 1)
+    delays = DelayModel(obs = 2, act = 2, com = 12, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
@@ -402,7 +402,7 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 2.5, ki = 0.0, kd = 0.3)
+            kp = 3.5, ki = 0.0, kd = 0.3)
     end
     println("ref point created")
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
