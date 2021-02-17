@@ -20,9 +20,9 @@ Send the current known states and actuation for ROS to execute. Block untill a r
     
 Due to communication need - now
 """
-function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, t::Int64, f_state, f_obs, f_msg) where {X,Z,U,N,Msg}
-    s = JSON.json(Dict("states" => x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs])) * "\n"
-    # println("sending $s")
+function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, ctrl_state, t::Int64, f_state, f_obs, f_msg) where {X,Z,U,N,Msg}
+    s = JSON.json(Dict("ctrl_state" => ctrl_state, "states" => x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs])) * "\n"
+    println("sending $s")
     write(conn, s)
     result = readline(conn)
     result_dict::Dict{String,Any} = JSON.parse(result) 
@@ -169,8 +169,9 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         # limit control TODO: change to c++ 
         # u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
         # send and get state
+        ctrl_state = controllers[car_id].ideal_xz
         @debug "[$t], state is $x, action is $u"
-        x, z, msg_recieved_pair, t_diff = send_and_get_states(conn, x, u, z, ms_new, t, f_state, f_obs, f_msg)
+        x, z, msg_recieved_pair, t_diff = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, f_state, f_obs, f_msg)
 
         add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second)
         # parse the message
