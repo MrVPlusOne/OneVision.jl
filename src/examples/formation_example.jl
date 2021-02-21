@@ -347,7 +347,7 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 2, act = 2, com = 12, ΔT = 1)
+    delays = DelayModel(obs = 1, act = 1, com = 6, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
@@ -375,7 +375,7 @@ function get_framework(
             push!(init,  (X(x, y, θ, v, s), Z(U(0.0, 0.0), 1), U(0.0, 0.0)))
         end;
     end
-    println("init status read")
+    @info "init status read"
     triangle_formation = let
         if(N == 1)
             [[zero(X)]; []]
@@ -386,7 +386,6 @@ function get_framework(
             [[zero(X)]; circle]
         end
     end
-    println("triangle formation created")
     vertical_formation = let
         l = 1.5
         leader_idx = round_ceil(N/2)
@@ -394,7 +393,14 @@ function get_framework(
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
     end
 
-    formations = [triangle_formation, vertical_formation]
+    horizontal_formation = let
+        l = 0.5
+        leader_idx = round_ceil(N/2)
+        line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+    end
+
+    formations = [triangle_formation, horizontal_formation]
     form_from_id(i) = formations[i]
 
     RefK = if track_config
@@ -402,26 +408,23 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 3.5, ki = 0.0, kd = 0.3)
+            kp = 0.7, ki = 0.2, kd = 0.2)
     end
-    println("ref point created")
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
-    println("central ctrl created")
-
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 3.0, y = 3.0, θ = 0.5), N))
-        u_weights = SVector{N}(fill(U(v̂ = 2, ψ̂ = 3.0), N))
+        x_weights = SVector{N}(fill(X(x = 10.0, y = 10.0, θ = 1.0, v=1.0, ψ=100.0), N))
+        u_weights = SVector{N}(fill(U(v̂ = 1.0, ψ̂ = 100.0), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 
     framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
 
-    println("init status is $init")
+    @info "init status is $init"
     #exit(0)
     return framework,  init
 end

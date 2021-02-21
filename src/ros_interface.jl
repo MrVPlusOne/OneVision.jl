@@ -22,7 +22,7 @@ Due to communication need - now
 """
 function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, ctrl_state, t::Int64, f_state, f_obs, f_msg) where {X,Z,U,N,Msg}
     s = JSON.json(Dict("ctrl_state" => ctrl_state, "states" => x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs])) * "\n"
-    println("sending $s")
+    @debug "sending $s"
     write(conn, s)
     result = readline(conn)
     result_dict::Dict{String,Any} = JSON.parse(result) 
@@ -72,7 +72,7 @@ function create_cache_from_vec(msg_qss::FixedQueue{Each{Msg}}, fleet_size::Int64
         # gives a vector of msg where index = car_id
         for (i, m) in enumerate(msgs)
             # this iterates over the car
-            println("current msg time is $(m.δx.time)")
+            @debug "current msg time is $(m.δx.time)"
             msg_ds_arr[i][m.δx.time] = m
         end
     end

@@ -74,7 +74,7 @@ function plan_trajectory(
     if !Optim.converged(res)
         @warn "Optim not converged: $res"
     end
-
+    @debug "optim result $res"
     uvec = Optim.minimizer(res)
     n_u = length(U)
     # û = @SVector[U(uvec[1+n_u*i:n_u*(i+1)]) for i in 1:H]

@@ -29,7 +29,6 @@ get_pos(s::CarX) = @SVector[s.x, s.y]
     v̂::R = 0.0
     "desired steering angle"
     ψ̂::R = 0.0
-    
 end
 
 # TODO: fine-tune these parameters
@@ -49,19 +48,19 @@ end
     "maximum linear acceleration/deceleration per frequency"
     k_max_a::ℝ = 0.25
     "maximum angular acceleration/deceleration per frequency"
-    k_max_ω::ℝ = 0.1°
+    k_max_ω::ℝ = 0.001°
 
     "add_noise(x, t) -> x′"
     add_noise::NF = (x, t) -> x
     integrator_samples::ℕ = 1
 end
 
-ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l, v)
+ψ_from_v_ω(v, ω, l) = (abs(v) < 1e-4) ? 0.0 : atan(ω * l / v)
 ω_from_v_ψ(v, ψ, l) = tan(ψ) * v / l
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
-    v = clamp(v, -dy.max_v, dy.max_v)
     ψ = ψ_from_v_ω(v, ω, dy.l)
+    v = clamp(v, -dy.max_v, dy.max_v)
     ψ = clamp(ψ, -dy.max_ψ, dy.max_ψ)
     CarU(v, ψ)
 end
@@ -74,7 +73,8 @@ function OneVision.limit_control(dy::CarDynamics, u::U, x, t)::U where {U}
     if v̂1 == v̂ && ψ̂1 == ψ̂
         u
     else
-        U(v̂, ψ̂)
+        U(v̂1, ψ̂1)
+        #U(v̂, ψ̂)
     end
 end
 
@@ -90,15 +90,18 @@ end
     ẏ = sin(θ) * v
     θ̇ = ω_from_v_ψ(v, ψ, dy.l)
     v̇ = dy.k_v * (v̂ - v)
-    ψ̇ = dy.k_ψ * restrict(ψ̂ - ψ)
+    ψ_dir = dy.k_ψ * restrict(ψ̂ - ψ)
     
     # bounds the variables
     N = dy.integrator_samples
     v̇_min, v̂_max = -dy.k_max_a/N, dy.k_max_a/N#v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
     v̇ = clamp(v̇, v̇_min, v̂_max)
-    ψ̇_min, ψ̇_max= -dy.k_max_ω/N, dy.k_max_ω/N#ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
-    ψ̇ = clamp(ψ̇, ψ̇_min, ψ̇_max)
-    X(ẋ, ẏ, θ̇, v̇, ψ̇)
+    if v == 0 && v̇ < 0.15 
+        v̇ = 0.0
+    end
+    ψ_dir_min, ψ_dir_max= -dy.k_max_ω/N, dy.k_max_ω/N#ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
+    ψ_dir = clamp(ψ_dir, ψ_dir_min, ψ_dir_max)
+    X(ẋ, ẏ, θ̇, v̇, ψ_dir)
 end
 
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
@@ -176,7 +179,14 @@ function track_refpoint(
     v, v_y = rotation2D(-θ) * v_p
     ω = v_y / d
     (v < 0) && (ω *= -1)
-    u_from_v_ω(v, ω, K.dy)
+    u = u_from_v_ω(v, ω, K.dy)
+    # bound steering based on state
+    ψ_min, ψ_max = s.ψ-3°, s.ψ+3°
+    ψ = clamp(u.ψ̂, ψ_min, ψ_max)
+    u = CarU(u.v̂, ψ)
+    @info "ideal ref point is $p̂, ref point is $p"
+    @info "[ctrl] lin vel is $v, ang vel is $ω action is $u"
+    u
 end
 
 
@@ -308,10 +318,11 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
         ξi = submap(ξ, Symbol(id))
         v_o = avoid_collision(id)
-        @debug "[$t] states are $xs\n refvel is $v_p actions are:$zs"
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p), xs[id], t)
+        @info "[$t] states are $xs\n refvel is $v_p obss are:$zs actions are:$u"
+
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u
     end
