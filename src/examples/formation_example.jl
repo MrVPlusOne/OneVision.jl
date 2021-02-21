@@ -408,7 +408,7 @@ function get_framework(
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 0.7, ki = 0.2, kd = 0.2)
+            kp = 0.7, ki = 0.3, kd = 0.0)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
@@ -417,8 +417,8 @@ function get_framework(
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 10.0, y = 10.0, θ = 1.0, v=1.0, ψ=100.0), N))
-        u_weights = SVector{N}(fill(U(v̂ = 1.0, ψ̂ = 100.0), N))
+        x_weights = SVector{N}(fill(X(x = 10.0, y = 10.0, θ = 1.0), N))
+        u_weights = SVector{N}(fill(U(v̂ = 1.0, ψ̂ = 20.0), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 
