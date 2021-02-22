@@ -347,7 +347,7 @@ function get_framework(
     track_config = false, 
 )
 
-    delays = DelayModel(obs = 1, act = 1, com = 6, ΔT = 1)
+    delays = DelayModel(obs = 5, act = 15, com = 6, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
@@ -394,7 +394,7 @@ function get_framework(
     end
 
     horizontal_formation = let
-        l = 0.5
+        l = 1.5
         leader_idx = round_ceil(N/2)
         line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
