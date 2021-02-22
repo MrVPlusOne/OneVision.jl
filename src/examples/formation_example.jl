@@ -394,7 +394,7 @@ function get_framework(
     end
 
     horizontal_formation = let
-        l = 1.5
+        l = 1.0
         leader_idx = round_ceil(N/2)
         line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
