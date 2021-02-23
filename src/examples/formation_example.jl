@@ -343,17 +343,35 @@ function get_framework(
     fleet_size ::Integer,
     freq :: Int32,
     CF::CFName = onevision_cf,
-    switch_formation = false,
-    track_config = false, 
+    switch_formation::Bool = false,
+    track_config::Bool = false, 
+    fn::String = "config/params.ini"
 )
+    # read config from file
+    conf = ConfParse("config/params.ini")
+    parse_conf!(conf)
+    obs_delay = parse(𝕋, retrieve(conf, "delay", "obs"))
+    act_delay = parse(𝕋, retrieve(conf, "delay", "act"))
+    comm_delay = parse(𝕋, retrieve(conf, "delay", "comm"))
+    ctrl_interval = parse(𝕋, retrieve(conf, "delay", "ctrl"))
+    delays = DelayModel(obs = obs_delay, act = act_delay, com = comm_delay, ΔT = ctrl_interval)
+    @debug "$delays"
 
-    delays = DelayModel(obs = 5, act = 15, com = 6, ΔT = 1)
     X, U = CarX{ℝ}, CarU{ℝ}
     Z = HVec{U, ℕ}
     delta_t = 1.0 / freq
 
     # Car dynamics parameters
-    dy_model = CarDynamics(;delta_t, max_v = 2.0)
+    dy_model = CarDynamics(;   
+    delta_t=delta_t,
+    max_v = parse(ℝ, retrieve(conf, "dynamics", "max_v")),
+    max_ψ = parse(ℝ, retrieve(conf, "dynamics", "max_psi")),
+    l = parse(ℝ, retrieve(conf, "dynamics", "l")) ,
+    k_v = parse(ℝ, retrieve(conf, "dynamics", "k_v")),
+    k_ψ = parse(ℝ, retrieve(conf, "dynamics", "k_psi")),
+    k_max_a = parse(ℝ, retrieve(conf, "dynamics", "k_max_a")),
+    k_max_ω = parse(ℝ, retrieve(conf, "dynamics", "k_max_omega")))
+    @debug "$dy_model"
 
     delays_model = delays
     H = 20
@@ -376,25 +394,29 @@ function get_framework(
         end;
     end
     @info "init status read"
+    triangle_sep::Float64 = parse(Float64, retrieve(conf, "formation", "triangle_sep"))
+    vertical_sep::Float64 = parse(Float64, retrieve(conf, "formation", "vertical_sep"))
+    horizental_sep::Float64 = parse(Float64, retrieve(conf, "formation", "horizental_sep"))
+    @debug "sep: $triangle_sep, $vertical_sep, $horizental_sep"
     triangle_formation = let
         if(N == 1)
             [[zero(X)]; []]
         else
-            l = 1.0
+            l = triangle_sep
             Δϕ = 360° / (N-1) 
             circle = [X(x = l * cos(Δϕ * i), y = l * sin(Δϕ * i), θ = 0.0) for i in 1:N-1]
             [[zero(X)]; circle]
         end
     end
     vertical_formation = let
-        l = 1.5
+        l = vertical_sep
         leader_idx = round_ceil(N/2)
         line = [X(x = l * (i - leader_idx), y = 0.0, θ = 0.0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
     end
 
     horizontal_formation = let
-        l = 1.0
+        l = horizental_sep
         leader_idx = round_ceil(N/2)
         line = [X(x = 0, y = l * (i - leader_idx), θ = 0) for i in 1:N]
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
@@ -403,12 +425,17 @@ function get_framework(
     formations = [triangle_formation, horizontal_formation]
     form_from_id(i) = formations[i]
 
+    kp::Float64 = parse(Float64, retrieve(conf, "pid", "kp"))
+    ki::Float64 = parse(Float64, retrieve(conf, "pid", "ki"))
+    kd::Float64 = parse(Float64, retrieve(conf, "pid", "kd"))
+    @debug "kp $kp ki $ki kd $kd"
+
     RefK = if track_config
         ConfigTrackControl(dy_model, 100.0, 0.0, 3.0)
     else
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = 0.7, ki = 0.3, kd = 0.0)
+            kp = kp, ki = ki, kd = kd)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
@@ -416,9 +443,17 @@ function get_framework(
     
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
+    loss_s_x::Float64 = parse(Float64, retrieve(conf, "loss", "s_x"))
+    loss_s_y::Float64 = parse(Float64, retrieve(conf, "loss", "s_y"))
+    loss_s_θ::Float64 = parse(Float64, retrieve(conf, "loss", "s_theta"))
+    loss_s_v::Float64 = parse(Float64, retrieve(conf, "loss", "s_v"))
+    loss_s_ψ::Float64 = parse(Float64, retrieve(conf, "loss", "s_psi"))
+    loss_u_v::Float64 = parse(Float64, retrieve(conf, "loss", "u_v"))
+    loss_u_ψ::Float64 = parse(Float64, retrieve(conf, "loss", "u_psi"))
+    @debug "loss: [$loss_s_x, $loss_s_y, $loss_s_θ, $loss_s_v, $loss_s_ψ], [$loss_u_v, $loss_u_ψ]"
     loss_model = let 
-        x_weights = SVector{N}(fill(X(x = 10.0, y = 10.0, θ = 1.0), N))
-        u_weights = SVector{N}(fill(U(v̂ = 1.0, ψ̂ = 20.0), N))
+        x_weights = SVector{N}(fill(X(x = loss_s_x, y = loss_s_y, θ = loss_s_θ, v=loss_s_v, ψ=loss_s_ψ), N))
+        u_weights = SVector{N}(fill(U(v̂ = loss_u_v, ψ̂ = loss_u_ψ), N))
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 

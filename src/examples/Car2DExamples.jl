@@ -14,6 +14,7 @@ using Makie
 using AbstractPlotting.MakieLayout
 using Printf: @sprintf
 using LinearAlgebra: norm
+using ConfParser
 import ColorSchemes
 import Dates
 
