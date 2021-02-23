@@ -60,6 +60,7 @@ end
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
     ψ = ψ_from_v_ω(v, ω, dy.l)
+    v = sign(v)*sqrt(v*v + ω*ω)
     v = clamp(v, -dy.max_v, dy.max_v)
     ψ = clamp(ψ, -dy.max_ψ, dy.max_ψ)
     CarU(v, ψ)
@@ -321,7 +322,7 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p), xs[id], t)
-        @info "[$t] states are $xs\n refvel is $v_p obss are:$zs actions are:$u"
+        @debug "[$t] states are $xs\n refvel is $v_p obss are:$zs actions are:$u"
 
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u
