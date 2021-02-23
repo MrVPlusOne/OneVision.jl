@@ -60,7 +60,6 @@ end
 
 function u_from_v_ω(v, ω, dy::CarDynamics)
     ψ = ψ_from_v_ω(v, ω, dy.l)
-    v = sign(v)*sqrt(v*v + ω*ω)
     v = clamp(v, -dy.max_v, dy.max_v)
     ψ = clamp(ψ, -dy.max_ψ, dy.max_ψ)
     CarU(v, ψ)
