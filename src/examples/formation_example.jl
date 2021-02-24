@@ -401,6 +401,12 @@ function get_framework(
     triangle_formation = let
         if(N == 1)
             [[zero(X)]; []]
+        elseif N == 3
+            # custom 3 formation
+            l = triangle_sep
+            Δϕs= [135°, -135°]
+            circle = [X(x = l * cos(ϕ), y = l * sin(ϕ), θ = 0.0) for ϕ in Δϕs]
+            [[zero(X)]; circle]
         else
             l = triangle_sep
             Δϕ = 360° / (N-1) 
@@ -410,9 +416,15 @@ function get_framework(
     end
     vertical_formation = let
         l = vertical_sep
+        line = [X(x = -l * (i-1), y = 0.0, θ = 0.0) for i in 1:N]
+        
+        """
+        l = vertical_sep
         leader_idx = round_ceil(N/2)
         line = [X(x = l * (i - leader_idx), y = 0.0, θ = 0.0) for i in 1:N]
-        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
+        [line[mod1(leader_idx + j - 1, N)] for j in 1:N]        
+        """
+        line
     end
 
     horizontal_formation = let
@@ -422,7 +434,7 @@ function get_framework(
         [line[mod1(leader_idx + j - 1, N)] for j in 1:N]
     end
 
-    formations = [triangle_formation, horizontal_formation]
+    formations = [triangle_formation, horizontal_formation, vertical_formation]
     form_from_id(i) = formations[i]
 
     kp::Float64 = parse(Float64, retrieve(conf, "pid", "kp"))
@@ -437,7 +449,7 @@ function get_framework(
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
             kp = kp, ki = ki, kd = kd)
     end
-    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l, max_r=1*dy_model.l)
+    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l*1.2, max_r=1.5*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
     
