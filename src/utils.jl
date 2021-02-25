@@ -4,7 +4,7 @@ export °, rotation2D, to_matrix
 export HVec, h_vec_from_dict
 export @kwdef, @_, @set
 export serialize_to_b_array, deserialize_from_b_array
-export restrict
+export restrict, square
 
 import DataStructures
 
@@ -19,6 +19,10 @@ using MacroTools: @capture
 using Serialization
 
 Optional{T} = Union{T, Missing}
+
+function square(n)
+    n*n
+end
 
 "A placeholder for unimplmeneted code."
 macro todo()

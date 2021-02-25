@@ -132,13 +132,33 @@ abstract type TrackingControl end
     kd::ℝ = 0.0
 end
 
+@kwdef struct WallObsControl <: TrackingControl
+    dy::CarDynamics
+    "The distance between the reference point and rear axis, positive means forward"
+    ref_pos::ℝ
+    ctrl_interval::ℝ
+    "Propotional gain"
+    kp::ℝ
+    "(Discrete) Integral gain"
+    ki::ℝ = 0.0
+    "(Discrete) Derivative gain"
+    kd::ℝ = 0.0
+    "1dtoc values"
+    max_a::ℝ = 4.0
+    "Stopping distance"
+    stop_distance::ℝ =0.0
+    "(leader car only) target velocity"
+    target_v::ℝ =0.0
+end
+
 function ref_point(ref_pos, s::CarX)
+    @info "ref pos is $ref_pos, type is $(typeof(ref_pos))"
     x = s.x + ref_pos * cos(s.θ)
     y = s.y + ref_pos * sin(s.θ)
     @SVector[x, y]
 end
 
-ref_point(K::RefPointTrackControl, s::CarX) = ref_point(K.ref_pos, s)
+ref_point(K::Union{RefPointTrackControl, WallObsControl}, s::CarX) = ref_point(K.ref_pos, s)
 
 function ref_point_v(ref_pos, car_l, s::CarX)
     d = ref_pos
@@ -149,10 +169,10 @@ function ref_point_v(ref_pos, car_l, s::CarX)
     @SVector[v̂_x, v̂_y]
 end
 
-ref_point_v(K::RefPointTrackControl, s::CarX) = ref_point_v(K.ref_pos, K.dy.l, s)
+ref_point_v(K::Union{RefPointTrackControl, WallObsControl}, s::CarX) = ref_point_v(K.ref_pos, K.dy.l, s)
 
 function track_ref(
-    K::RefPointTrackControl, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}, t
+    K::Union{RefPointTrackControl, WallObsControl}, ξ::SymbolMap, ŝ::CarX{R}, s::CarX{R}, t
 )::CarU{R} where R
     # compute the desired ref point velocity
     p̂ = ref_point(K, ŝ)
@@ -162,7 +182,7 @@ function track_ref(
 end
 
 function track_refpoint(
-    K::RefPointTrackControl, ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
+    K::Union{RefPointTrackControl, WallObsControl}, ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
 )::CarU{R} where R
     ξ = submap(ξ, :track_refpoint)
     p = ref_point(K, s)
@@ -312,7 +332,8 @@ function formation_controller(ctrl::FormationControl{RefPointTrackControl}, ξ, 
 
     function action(id)::CarU
         #return CarU(0.0, 0.0)
-        (id == 1) && return zs[1].c
+        (id == 1) &&return zs[1].c
+        
         #xs[id].θ = restrict(xs[id].θ)
         s = form[id] # initial state
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
@@ -386,6 +407,72 @@ function OneVision.control_all(
 )
     f = formation_controller(ctrl, ξ, xs, zs, t)
     f.(ids)
+end
+
+
+
+
+
+function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs, t)
+    formpoint_to_refpoint = to_formation_frame(ctrl, xs[1])
+    form = ctrl.formation(xs, zs, t)
+    
+    N = length(xs)
+    function avoid_collision(i)
+        ca = ctrl.avoidance
+        pos = get_pos(xs[i]) # ref_point(ctrl.K, xs[i])
+        sum(repel_force(ca, get_pos(xs[j]), pos) for j in 1:N if j != i)
+    end
+
+    function oneDTOC(dist_left) where X
+        if(isinf(wall_pos))
+            return ctrl.K.target_v
+        end
+        # one D Time Optimal Control
+        # TODO: add latency compensation
+        min_a, max_a = -ctrl.K.max_a, ctrl.K.dy.max_a
+        min_v, max_v = -ctrl.K.dy.k_max_v, ctrl.K.target_v
+        dt = ctrl.K.dy.delta_t
+        speed = state.v
+        s = speed
+        if (square(speed + max_a*dt)/(2*max_a) < dist_left)
+            s = speed + max_a*dt
+        elseif (square(speed)/(2*max_a) + dt*speed < dist_left)
+            s = speed
+        else
+            s = speed - max_a*dt
+        end
+        clamp(s, min_v, max_v)
+    end
+
+    function action(id)::CarU
+        #return CarU(0.0, 0.0)
+        #xs[id].θ = restrict(xs[id].θ)
+        @info "in action, obs are $zs"
+        s = form[id] # initial state
+        (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
+        ξi = submap(ξ, Symbol(id))
+        fleet_size = length(xs)
+        v_o = if fleet_size > 1 avoid_collision(id) else @SVector[0.0, 0.0] end
+        if (id == 1)
+            # change velocity
+            wall_pos = zs[id].c
+            state = xs[id]
+            dist_left = sqrt(square(wall_pos[1] - state.x) + square(wall_pos[2] - state.y))
+            p = @SVector[1.0, 0]
+            v_p = @SVector[oneDTOC(dist_left), 0.0] 
+            v_o = @SVector[0.0, 0.0]
+        end
+        #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
+        #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n obss are:$zs \n actions are:$u"
+
+        #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
+        return u
+    end
+
+    action
 end
 
 function car_triangle(x, y, θ; len = 0.2, width = 0.06)

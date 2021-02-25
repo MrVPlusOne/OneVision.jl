@@ -344,7 +344,7 @@ function get_framework(
     freq :: Int32,
     CF::CFName = onevision_cf,
     switch_formation::Bool = false,
-    track_config::Bool = false, 
+    track_config::String = "wall_obs",#"track_ref", # wall_obs 
     fn::String = "config/params.ini"
 )
     # read config from file
@@ -358,7 +358,11 @@ function get_framework(
     @debug "$delays"
 
     X, U = CarX{ℝ}, CarU{ℝ}
-    Z = HVec{U, ℕ}
+    Z, init_z = if(track_config == "wall_obs")
+        HVec{Tuple{ℝ, ℝ}, ℕ}, ()->Z((Inf, Inf), 1) # stop distance, formation
+    else
+        HVec{U, ℕ}, ()->Z(U(0.0, 0.0), 1)# action, formation
+    end
     delta_t = 1.0 / freq
 
     # Car dynamics parameters
@@ -388,9 +392,9 @@ function get_framework(
             θ = parse(ℝ, readline(io))
             v = parse(ℝ, readline(io))
             s = parse(ℝ, readline(io))
-            i_s = (X(x, y, θ, v, s), Z(U(0.0, 0.0), 1), U(0.0, 0.0))
+            i_s = (X(x, y, θ, v, s), init_z(), U(0.0, 0.0))
             @assert typeof(i_s) == Tuple{X, Z, U}
-            push!(init,  (X(x, y, θ, v, s), Z(U(0.0, 0.0), 1), U(0.0, 0.0)))
+            push!(init,  (X(x, y, θ, v, s), init_z(), U(0.0, 0.0)))
         end;
     end
     @info "init status read"
@@ -442,12 +446,21 @@ function get_framework(
     kd::Float64 = parse(Float64, retrieve(conf, "pid", "kd"))
     @debug "kp $kp ki $ki kd $kd"
 
-    RefK = if track_config
+    RefK = if track_config == "config_track"
         ConfigTrackControl(dy_model, 100.0, 0.0, 3.0)
-    else
+    elseif track_config == "track_ref"
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
             kp = kp, ki = ki, kd = kd)
+    elseif track_config == "wall_obs"
+        WallObsControl(;
+        dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
+        kp = kp, ki = ki, kd = kd, 
+        stop_distance = parse(Float64, retrieve(conf, "wall", "stop_distance"),), 
+        target_v = parse(Float64, retrieve(conf, "wall", "target_v")))
+    else
+        error("Tracking configuration not found!")
+        exit(0)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l*1.2, max_r=1.5*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
