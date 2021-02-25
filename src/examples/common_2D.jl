@@ -149,6 +149,8 @@ end
     stop_distance::ℝ =0.0
     "(leader car only) target velocity"
     target_v::ℝ =0.0
+    "maximum range of sensor"
+    sensor_range::ℝ = 10.0
 end
 
 function ref_point(ref_pos, s::CarX)
@@ -424,16 +426,15 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         sum(repel_force(ca, get_pos(xs[j]), pos) for j in 1:N if j != i)
     end
 
-    function oneDTOC(dist_left) where X
-        if(isinf(wall_pos))
+    function oneDTOC(dist_left::Float64, speed::Float64)
+        if(isinf(dist_left))
             return ctrl.K.target_v
         end
         # one D Time Optimal Control
         # TODO: add latency compensation
-        min_a, max_a = -ctrl.K.max_a, ctrl.K.dy.max_a
-        min_v, max_v = -ctrl.K.dy.k_max_v, ctrl.K.target_v
+        min_a, max_a = -ctrl.K.max_a, ctrl.K.max_a
+        min_v, max_v = -ctrl.K.dy.max_v, ctrl.K.target_v
         dt = ctrl.K.dy.delta_t
-        speed = state.v
         s = speed
         if (square(speed + max_a*dt)/(2*max_a) < dist_left)
             s = speed + max_a*dt
@@ -459,14 +460,16 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
             wall_pos = zs[id].c
             state = xs[id]
             dist_left = sqrt(square(wall_pos[1] - state.x) + square(wall_pos[2] - state.y))
-            p = @SVector[1.0, 0]
-            v_p = @SVector[oneDTOC(dist_left), 0.0] 
+            dist_left -= ctrl.K.stop_distance
+            dist_left = clamp(dist_left, 0.0, ctrl.K.sensor_range)
+            p = @SVector[clamp(dist_left, 0.0, 1.0), 0] + @SVector[state.x, state.y]
+            v_p = @SVector[oneDTOC(dist_left, state.v), 0.0] 
             v_o = @SVector[0.0, 0.0]
         end
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
-        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n obss are:$zs \n actions are:$u"
+        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(zs[id].c) obss are:$zs \n actions are:$u"
 
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u

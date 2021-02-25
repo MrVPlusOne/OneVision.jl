@@ -306,7 +306,8 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
     N::Int64 = fleet_size
     #init_status = get_initial_states(N)
     println("in open loop")
-    framework, init_status = get_framework(car_id, fleet_size, freq)
+    track_config = "wall_obs" #"track_ref", # wall_obs 
+    framework, init_status, X, Z, U = get_framework(car_id, fleet_size, freq, track_config)
 
     port::Integer = car_id + 5000
 
@@ -317,9 +318,10 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
         x = result["x"]
         return x
     end
+
     function parse_obs(result::Dict{String, Any}) 
-        U =  CarU{ℝ}
-        z = HVec{U, ℕ}(result["z"]["c"], result["z"]["d"])
+        @info result
+        z = Z((result["z"]["c"][1], result["z"]["c"][2]), result["z"]["d"])
         return z
     end
 
@@ -342,9 +344,9 @@ function get_framework(
     car_id :: Integer,
     fleet_size ::Integer,
     freq :: Int32,
+    track_config::String,
     CF::CFName = onevision_cf,
     switch_formation::Bool = false,
-    track_config::String = "wall_obs",#"track_ref", # wall_obs 
     fn::String = "config/params.ini"
 )
     # read config from file
@@ -486,7 +488,7 @@ function get_framework(
 
     @info "init status is $init"
     #exit(0)
-    return framework,  init
+    return framework,  init, X, Z, U
 end
 
 # TODO: change to distributed setting
