@@ -204,7 +204,10 @@ function track_refpoint(
         Δt = K.ctrl_interval
         ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
         dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
-        K.kp * (p̂ - p) + ∫edt + K.kv*v_p̂ + dedt
+        p_ctrl = K.kp * (p̂ - p)
+        ∫edt = [(if (∫edt[i] > 0) clamp(∫edt[i], 0.0, abs(p_ctrl[i])*0.1) else  clamp(∫edt[i], -abs(p_ctrl[i])*0.1, 0.0) end) for i in 1:length(∫edt)]
+        dedt = [(if (dedt[i] > 0) clamp(dedt[i], 0.0, abs(p_ctrl[i])*0.1) else  clamp(dedt[i], -abs(p_ctrl[i])*0.1, 0.0) end) for i in 1:length(dedt)]
+        p_ctrl + ∫edt + dedt + K.kv*v_p̂ 
     end
     #print("ref pt is $p, optimal is $p̂")
     # convert `v_p` back into the control `CarU`
@@ -215,7 +218,7 @@ function track_refpoint(
     (v < 0) && (ω *= -1)
     u = u_from_v_ω(v, ω, K.dy)
     # bound steering based on state
-    ψ_min, ψ_max = s.ψ-3°, s.ψ+3°
+    ψ_min, ψ_max = s.ψ-10°, s.ψ+10°
     ψ = clamp(u.ψ̂, ψ_min, ψ_max)
     u = CarU(u.v̂, ψ)
     @info "ideal ref point is $p̂, ref point is $p"
