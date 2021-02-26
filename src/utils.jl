@@ -4,7 +4,7 @@ export °, rotation2D, to_matrix
 export HVec, h_vec_from_dict
 export @kwdef, @_, @set
 export serialize_to_b_array, deserialize_from_b_array
-export restrict, square
+export restrict, square, intersect_line_circle
 
 import DataStructures
 
@@ -309,3 +309,44 @@ end
 function restrict(theta)
     return theta #rem2pi(theta, RoundNearest)
 end
+
+"""
+modified from https://stackoverflow.com/questions/30844482/what-is-most-efficient-way-to-find-the-intersection-of-a-line-and-a-circle-in-py
+Find the intersection between line and circle
+Line is defined by 2 points. Note that the line extends arbitrarly beyond the points
+Circle is defined by the center and radius
+"""
+function intersect_line_circle(p1, p2, circle_center, r) ::Vector{Vector{Float64}}
+    tang_tol = 1e-3
+    p1x, p1y = p1
+    p2x, p2y = p2
+    cx, cy = circle_center
+    x1, y1 = p1x -cx, p1y - cy
+    x2, y2 = p2x -cx, p2y - cy
+    dx, dy = x2-x1, y2 -y1
+    dr = sqrt(dx*dx + dy*dy) 
+    big_d = x1*y2 - x2*y1
+    discriminant = square(r) *square(dr) - square(big_d)
+    if discriminant < 0.0
+        return Vector{Vector{Float64}}()
+    else
+        intersections = Vector{Vector{Float64}}()
+        s = if (dy < 0.0) 
+            [1.0, -1.0] 
+        else 
+            [-1.0, 1.0] 
+        end
+        for sign in s
+            ix = cx + (big_d * dy + sign * (if dy < 0  -1 else 1 end) * dx * sqrt(discriminant)) / square(dr)
+            iy = cy + (-big_d * dx + sign * abs(dy) * sqrt(discriminant)) / square(dr)
+            i = [ix, iy]
+            push!(intersections, i)
+        end
+        if length(intersections) == 2 && abs(discriminant) < tang_tol
+            return [intersections[1]]
+        else 
+            return intersections
+        end
+    end
+end
+

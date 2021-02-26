@@ -130,6 +130,8 @@ abstract type TrackingControl end
     ki::ℝ = 0.0
     "(Discrete) Derivative gain"
     kd::ℝ = 0.0
+    "(Discrete) velocity gain"
+    kv::ℝ = 0.5
 end
 
 @kwdef struct WallObsControl <: TrackingControl
@@ -143,14 +145,24 @@ end
     ki::ℝ = 0.0
     "(Discrete) Derivative gain"
     kd::ℝ = 0.0
+    "(Discrete) velocity gain"
+    kv::ℝ = 0.5
     "1dtoc values"
     max_a::ℝ = 4.0
     "Stopping distance"
     stop_distance::ℝ =0.0
+    "Stopping distance tolerance"
+    stop_dist_tol::ℝ = 5e-3
     "(leader car only) target velocity"
     target_v::ℝ =0.0
     "maximum range of sensor"
     sensor_range::ℝ = 10.0
+    "point 1"
+    p1::Vector{ℝ} = [0.0, 0.0]
+    "point 2"
+    p2::Vector{ℝ} = [0.0, 1.0]
+    "radius "
+    r::ℝ = 1.0
 end
 
 function ref_point(ref_pos, s::CarX)
@@ -192,7 +204,7 @@ function track_refpoint(
         Δt = K.ctrl_interval
         ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
         dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
-        K.kp * (p̂ - p) + ∫edt + K.kd*v_p̂ 
+        K.kp * (p̂ - p) + ∫edt + K.kv*v_p̂ + dedt
     end
     #print("ref pt is $p, optimal is $p̂")
     # convert `v_p` back into the control `CarU`
@@ -436,12 +448,16 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         min_v, max_v = -ctrl.K.dy.max_v, ctrl.K.target_v
         dt = ctrl.K.dy.delta_t
         s = speed
-        if (square(speed + max_a*dt)/(2*max_a) < dist_left)
+        if (square(speed + max_a*dt)/(2*max_a) + 1.0/2.0(speed*2+max_a*dt)*dt < dist_left)
             s = speed + max_a*dt
         elseif (square(speed)/(2*max_a) + dt*speed < dist_left)
             s = speed
         else
             s = speed - max_a*dt
+        end
+        @info "dist left is $dist_left s is $s, speed is $speed"
+        if abs(speed) <  0.01 && (sign(s)==1 && s > speed || sign(s)==-1 && s < speed)
+            s = 0.2*sign(s)
         end
         clamp(s, min_v, max_v)
     end
@@ -455,22 +471,47 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         ξi = submap(ξ, Symbol(id))
         fleet_size = length(xs)
         v_o = if fleet_size > 1 avoid_collision(id) else @SVector[0.0, 0.0] end
+        wall_pos = if zs[id].c[1] == Inf || zs[id].c[2] == Inf
+            @SVector[Inf, Inf]
+        else
+            @SVector[zs[id].c[1], zs[id].c[2]]
+        end
         if (id == 1)
-            # change velocity
-            wall_pos = zs[id].c
             state = xs[id]
+            # compute for distance left
             dist_left = sqrt(square(wall_pos[1] - state.x) + square(wall_pos[2] - state.y))
             dist_left -= ctrl.K.stop_distance
             dist_left = clamp(dist_left, 0.0, ctrl.K.sensor_range)
-            p = @SVector[clamp(dist_left, 0.0, 1.0), 0] + @SVector[state.x, state.y]
-            v_p = @SVector[oneDTOC(dist_left, state.v), 0.0] 
+            if dist_left < ctrl.K.stop_dist_tol
+                dist_left = 0.0
+            end
+            # compute target point
+            cur_pos = @SVector[state.x, state.y]
+            res = intersect_line_circle(ctrl.K.p1, ctrl.K.p2, cur_pos, ctrl.K.r)
+            θ = rem2pi(state.θ, RoundNearest)
+            i = 0
+            while isempty(res)
+                res = intersect_line_circle(ctrl.K.p1, ctrl.K.p2, cur_pos, ctrl.K.r+1)
+                i += 1
+            end
+            if isempty(res)
+                # no intersection found, that indicates that too much deviation has happened
+                @error "Deviated offcourse, current position is $(cur_pos)"   
+                
+            else
+                r = res[argmin([abs(rem2pi(atan(r[2] - cur_pos[2], r[1] - cur_pos[1]) - θ, RoundNearest)) for r in res])]
+                θ = atan(r[2] - cur_pos[2], r[1] - cur_pos[1])
+            end
+            #θ = clamp(θ, rem2pi(state.θ, RoundNearest) -15°, rem2pi(state.θ, RoundNearest) + 15°)
+            p = rotation2D(θ)*@SVector[clamp(dist_left, 0.0, 0.1), 0] + ref_point(ctrl.K.ref_pos, state)#rotation2D(state.θ)*@SVector[clamp(dist_left, 0.0, 1.0), 0] + @SVector[state.x, state.y]
+            v_p = rotation2D(θ)*@SVector[oneDTOC(dist_left, state.v), 0.0] 
             v_o = @SVector[0.0, 0.0]
+            @info "theta is $θ, dist_left is $dist_left, vel is $(oneDTOC(dist_left, state.v)) intersection is $res"
         end
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
-        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(zs[id].c) obss are:$zs \n actions are:$u"
-
+        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(wall_pos) obss are:$zs \n actions are:$u"
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u
     end

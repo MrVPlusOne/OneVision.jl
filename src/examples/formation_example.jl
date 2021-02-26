@@ -55,6 +55,16 @@ function OneVision.obs_forward(dy::FormationObsDynamics, x, z, t::𝕋)
     HVec(dy.external_u(x, t), dy.external_formation(x, t))
 end
 
+struct FormationWallObsDynamic{Fu, Ff} <: ObsDynamics 
+    "`external_u(x, z, t) -> u`"
+    external_u::Fu
+    "`external_formation(x, t) -> formation_idx`"
+    external_formation::Ff
+end
+
+function OneVision.obs_forward(dy::FormationWallObsDynamic, x, z, t::𝕋)
+    HVec(dy.external_u(x, z, t), dy.external_formation(x, t))
+end
 
 function formation_example(;time_end = 20.0, freq = 100.0, 
         noise = 0.005, sensor_noise = noise, 
@@ -306,8 +316,7 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
     N::Int64 = fleet_size
     #init_status = get_initial_states(N)
     println("in open loop")
-    track_config = "wall_obs" #"track_ref", # wall_obs 
-    framework, init_status, X, Z, U = get_framework(car_id, fleet_size, freq, track_config)
+    framework, init_status, X, Z, U, track_config = get_framework(car_id, fleet_size, freq)
 
     port::Integer = car_id + 5000
 
@@ -321,7 +330,12 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
 
     function parse_obs(result::Dict{String, Any}) 
         @info result
-        z = Z((result["z"]["c"][1], result["z"]["c"][2]), result["z"]["d"])
+        z = 
+        if track_config == "wall_obs"
+            Z((result["z"]["c"][1], result["z"]["c"][2]), result["z"]["d"])
+        else
+            HVec{U, ℕ}(result["z"]["c"], result["z"]["d"])
+        end
         return z
     end
 
@@ -344,7 +358,6 @@ function get_framework(
     car_id :: Integer,
     fleet_size ::Integer,
     freq :: Int32,
-    track_config::String,
     CF::CFName = onevision_cf,
     switch_formation::Bool = false,
     fn::String = "config/params.ini"
@@ -352,10 +365,11 @@ function get_framework(
     # read config from file
     conf = ConfParse("config/params.ini")
     parse_conf!(conf)
-    obs_delay = parse(𝕋, retrieve(conf, "delay", "obs"))
-    act_delay = parse(𝕋, retrieve(conf, "delay", "act"))
-    comm_delay = parse(𝕋, retrieve(conf, "delay", "comm"))
-    ctrl_interval = parse(𝕋, retrieve(conf, "delay", "ctrl"))
+    track_config::String = retrieve(conf, "controller", "track_config")
+    obs_delay = retrieve(conf, "delay", "obs", 𝕋)
+    act_delay = retrieve(conf, "delay", "act", 𝕋)
+    comm_delay = retrieve(conf, "delay", "comm", 𝕋)
+    ctrl_interval = retrieve(conf, "delay", "ctrl", 𝕋)
     delays = DelayModel(obs = obs_delay, act = act_delay, com = comm_delay, ΔT = ctrl_interval)
     @debug "$delays"
 
@@ -370,13 +384,13 @@ function get_framework(
     # Car dynamics parameters
     dy_model = CarDynamics(;   
     delta_t=delta_t,
-    max_v = parse(ℝ, retrieve(conf, "dynamics", "max_v")),
-    max_ψ = parse(ℝ, retrieve(conf, "dynamics", "max_psi")),
-    l = parse(ℝ, retrieve(conf, "dynamics", "l")) ,
-    k_v = parse(ℝ, retrieve(conf, "dynamics", "k_v")),
-    k_ψ = parse(ℝ, retrieve(conf, "dynamics", "k_psi")),
-    k_max_a = parse(ℝ, retrieve(conf, "dynamics", "k_max_a")),
-    k_max_ω = parse(ℝ, retrieve(conf, "dynamics", "k_max_omega")))
+    max_v = retrieve(conf, "dynamics", "max_v", ℝ),
+    max_ψ = retrieve(conf, "dynamics", "max_psi", ℝ),
+    l = retrieve(conf, "dynamics", "l", ℝ) ,
+    k_v = retrieve(conf, "dynamics", "k_v", ℝ),
+    k_ψ = retrieve(conf, "dynamics", "k_psi", ℝ),
+    k_max_a = retrieve(conf, "dynamics", "k_max_a", ℝ),
+    k_max_ω = retrieve(conf, "dynamics", "k_max_omega", ℝ))
     @debug "$dy_model"
 
     delays_model = delays
@@ -400,9 +414,9 @@ function get_framework(
         end;
     end
     @info "init status read"
-    triangle_sep::Float64 = parse(Float64, retrieve(conf, "formation", "triangle_sep"))
-    vertical_sep::Float64 = parse(Float64, retrieve(conf, "formation", "vertical_sep"))
-    horizental_sep::Float64 = parse(Float64, retrieve(conf, "formation", "horizental_sep"))
+    triangle_sep::Float64 = retrieve(conf, "formation", "triangle_sep", Float64)
+    vertical_sep::Float64 = retrieve(conf, "formation", "vertical_sep", Float64)
+    horizental_sep::Float64 = retrieve(conf, "formation", "horizental_sep", Float64)
     @debug "sep: $triangle_sep, $vertical_sep, $horizental_sep"
     triangle_formation = let
         if(N == 1)
@@ -443,9 +457,11 @@ function get_framework(
     formations = [triangle_formation, horizontal_formation, vertical_formation]
     form_from_id(i) = formations[i]
 
-    kp::Float64 = parse(Float64, retrieve(conf, "pid", "kp"))
-    ki::Float64 = parse(Float64, retrieve(conf, "pid", "ki"))
-    kd::Float64 = parse(Float64, retrieve(conf, "pid", "kd"))
+    kp::Float64 = retrieve(conf, "pid", "kp", Float64)
+    ki::Float64 = retrieve(conf, "pid", "ki", Float64)
+    kd::Float64 = retrieve(conf, "pid", "kd", Float64)
+    kv::Float64 = retrieve(conf, "pid", "kv", Float64)
+
     @debug "kp $kp ki $ki kd $kd"
 
     RefK = if track_config == "config_track"
@@ -453,30 +469,34 @@ function get_framework(
     elseif track_config == "track_ref"
         RefPointTrackControl(;
             dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-            kp = kp, ki = ki, kd = kd)
+            kp = kp, ki = ki, kd = kd, kv=kv)
     elseif track_config == "wall_obs"
         WallObsControl(;
         dy = dy_model, ref_pos = dy_model.l, ctrl_interval = delta_t * ΔT, 
-        kp = kp, ki = ki, kd = kd, 
-        stop_distance = parse(Float64, retrieve(conf, "wall", "stop_distance"),), 
-        target_v = parse(Float64, retrieve(conf, "wall", "target_v")))
+        kp = kp, ki = ki, kd = kd, kv=kv,
+        stop_distance = retrieve(conf, "wall", "stop_distance", Float64), 
+        target_v = retrieve(conf, "wall", "target_v", Float64),
+        p1 = [parse(ℝ, i) for i in retrieve(conf, "wall", "p1")],
+        p2 = [parse(ℝ, i) for i in retrieve(conf, "wall", "p2")],
+        r = retrieve(conf, "wall", "r", ℝ)
+        )
     else
-        error("Tracking configuration not found!")
+        error("Tracking configuration not found! Current value is $track_config")
         exit(0)
     end
     avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l*1.2, max_r=1.5*dy_model.l)
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
-    
+
     world_model = WorldDynamics(fill((dy_model, StaticObsDynamics()), N))
 
-    loss_s_x::Float64 = parse(Float64, retrieve(conf, "loss", "s_x"))
-    loss_s_y::Float64 = parse(Float64, retrieve(conf, "loss", "s_y"))
-    loss_s_θ::Float64 = parse(Float64, retrieve(conf, "loss", "s_theta"))
-    loss_s_v::Float64 = parse(Float64, retrieve(conf, "loss", "s_v"))
-    loss_s_ψ::Float64 = parse(Float64, retrieve(conf, "loss", "s_psi"))
-    loss_u_v::Float64 = parse(Float64, retrieve(conf, "loss", "u_v"))
-    loss_u_ψ::Float64 = parse(Float64, retrieve(conf, "loss", "u_psi"))
+    loss_s_x::Float64 = retrieve(conf, "loss", "s_x", Float64)
+    loss_s_y::Float64 = retrieve(conf, "loss", "s_y", Float64)
+    loss_s_θ::Float64 = retrieve(conf, "loss", "s_theta", Float64)
+    loss_s_v::Float64 = retrieve(conf, "loss", "s_v", Float64)
+    loss_s_ψ::Float64 = retrieve(conf, "loss", "s_psi", Float64)
+    loss_u_v::Float64 = retrieve(conf, "loss", "u_v", Float64)
+    loss_u_ψ::Float64 = retrieve(conf, "loss", "u_psi", Float64)
     @debug "loss: [$loss_s_x, $loss_s_y, $loss_s_θ, $loss_s_v, $loss_s_ψ], [$loss_u_v, $loss_u_ψ]"
     loss_model = let 
         x_weights = SVector{N}(fill(X(x = loss_s_x, y = loss_s_y, θ = loss_s_θ, v=loss_s_v, ψ=loss_s_ψ), N))
@@ -488,7 +508,7 @@ function get_framework(
 
     @info "init status is $init"
     #exit(0)
-    return framework,  init, X, Z, U
+    return framework,  init, X, Z, U, track_config
 end
 
 # TODO: change to distributed setting
