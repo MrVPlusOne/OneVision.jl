@@ -6,6 +6,7 @@ using OneVision
 using OneVision: ℝ, ℕ, 𝕋, @kwdef
 using StaticArrays
 using Optim
+using ConfParser
 
 struct TrajPlanningProblem{H,ΔT,X,U,Dy <: SysDynamics}
     horizon::Val{H}
@@ -17,8 +18,27 @@ struct TrajPlanningProblem{H,ΔT,X,U,Dy <: SysDynamics}
     cache::Ref{Any}
 end
 
+function option_from_file(fn::String)::Optim.options 
+    conf = ConfParse(fn)
+    parse_conf!(conf)
+    Optim.options(
+        retrieve(conf, "optim_options", "x_tol", Float64),
+        retrieve(conf, "optim_options", "f_tol", Float64),
+        retrieve(conf, "optim_options", "g_tol", Float64),
+        retrieve(conf, "optim_options", "f_calls_limit", Int64),
+        retrieve(conf, "optim_options", "g_calls_limit", Int64),
+        retrieve(conf, "optim_options", "h_calls_limit", Int64),
+        retrieve(conf, "optim_options", "allow_f_increases", Bool),
+        retrieve(conf, "optim_options", "iterations", Int64),
+        retrieve(conf, "optim_options", "store_trace", Bool),
+        retrieve(conf, "optim_options", "show_trace", Bool),
+        retrieve(conf, "optim_options", "extended_trace", Bool),
+        retrieve(conf, "optim_options", "time_limit", Float64),
+    )
+end
+
 TrajPlanningProblem(H::ℕ, ΔT::𝕋, dy, x_weights, u_weights;
-    optim_options = Optim.Options(iterations = 1000)) =
+    optim_options = option_from_file("config/params.ini")) =
     TrajPlanningProblem(Val(H), Val(ΔT), dy, x_weights, u_weights,
         optim_options, Ref{Any}(missing))
 
