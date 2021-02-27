@@ -339,11 +339,11 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
         return z
     end
 
-    function parse_msg(result::Dict{String, Any})::Pair{Each{ℕ}, Each{OvMsg}}
+    function parse_msg(result::Dict{String, Any}, M_TYPE)::Pair{Each{ℕ}, Each{M_TYPE}}
         #println("msgs are", result["msgs"])
         msg_array::Each{Vector{UInt8}} = result["msgs"]
         msg_senders::Each{ℕ} = result["msgs_senders"]
-        msgs::Each{OvMsg} = [deserialize_from_b_array(m) for m in msg_array] #[deserialize(msg) for msg in result["msgs"]]
+        msgs::Each{M_TYPE} = [deserialize_from_b_array(m) for m in msg_array] #[deserialize(msg) for msg in result["msgs"]]
         return Pair(msg_senders, msgs)
     end
 
@@ -366,12 +366,27 @@ function get_framework(
     conf = ConfParse("config/params.ini")
     parse_conf!(conf)
     track_config::String = retrieve(conf, "controller", "track_config")
+    # delays
     obs_delay = retrieve(conf, "delay", "obs", 𝕋)
     act_delay = retrieve(conf, "delay", "act", 𝕋)
     comm_delay = retrieve(conf, "delay", "comm", 𝕋)
     ctrl_interval = retrieve(conf, "delay", "ctrl", 𝕋)
     delays = DelayModel(obs = obs_delay, act = act_delay, com = comm_delay, ΔT = ctrl_interval)
-    @debug "$delays"
+    
+    #cf = naive_cf local_cf const_u_cf onevision_cf
+    cfname = retrieve(conf, "controller", "cf")
+    CF::CFName = if cfname == "onevision_cf"
+        onevision_cf
+    elseif cfname == "const_u_cf"
+        const_u_cf
+    elseif cfname == "local_cf"
+        local_cf
+    elseif cfname == "naive_cf"
+        naive_cf
+    else
+        @error "CFName not valid, current input is $cfname"
+        exit(1)
+    end
 
     X, U = CarX{ℝ}, CarU{ℝ}
     Z, init_z = if(track_config == "wall_obs")

@@ -20,8 +20,8 @@ Send the current known states and actuation for ROS to execute. Block untill a r
     
 Due to communication need - now
 """
-function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, ctrl_state, t::Int64, f_state, f_obs, f_msg) where {X,Z,U,N,Msg}
-    s = JSON.json(Dict("ctrl_state" => ctrl_state, "states" => x_old, "actuation" => u_old, "time" => t, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs])) * "\n"
+function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}, ctrl_state, t::Int64, t_msg::Int64, f_state, f_obs, f_msg) where {X,Z,U,N,Msg}
+    s = JSON.json(Dict("ctrl_state" => ctrl_state, "states" => x_old, "actuation" => u_old, "time" => t_msg, "observation" => z_old, "msgs" => [serialize_to_b_array(m) for m in msgs])) * "\n"
     @debug "sending $s"
     write(conn, s)
     result = readline(conn)
@@ -31,9 +31,10 @@ function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}
     # convert to state, obs, and msg
     x::X = f_state(result_dict)
     z::Z = f_obs(result_dict)
-    msgs::Pair{Each{ℕ}, Each{Msg}} = f_msg(result_dict)
+    msgs::Pair{Each{ℕ}, Each{Msg}} = f_msg(result_dict, Msg)
+    t_arr::Vector{𝕋} = result_dict["t_arr"]
     t::Float64 = result_dict["time"]
-    return x, z, msgs, t
+    return x, z, msgs, t, t_arr
 
     """
     # state: StaticArrays.MArray{Tuple{2},OneVision.Examples.Car1DExample.CarX{Float64},1,2}
@@ -56,30 +57,31 @@ end
 """
 TODO (Tongrui): Create an interface for common cache
 """
-function create_cache(msg_qs::AbstractVector{Msg})::Dict{𝕋,Msg} where Msg
+function create_cache(msg_qs::AbstractVector{Msg}, t::𝕋)::Dict{𝕋,Msg} where Msg
     msg_ds::Dict{T,Msg} = Dict()
     for m in msg_qs
-        msg_ds[m.δx.time] = m 
+        msg_ds[t] = m 
     end
     return msg_ds
 end
 
-function create_cache_from_vec(msg_qss::FixedQueue{Each{Msg}}, fleet_size::Int64)::Vector{Dict{𝕋,Msg}} where Msg
+function create_cache_from_vec(msg_qss::FixedQueue{Each{Msg}}, start_t::𝕋, fleet_size::Int64)::Tuple{Vector{Dict{𝕋,Msg}}, 𝕋} where Msg
     msg_ds_arr  = [Dict{𝕋,Msg}() for _ in 1:fleet_size]
-    
+    t = start_t
     for msgs in msg_qss.vec
         # this iterates over timesteps
         # gives a vector of msg where index = car_id
         for (i, m) in enumerate(msgs)
             # this iterates over the car
-            @debug "current msg time is $(m.δx.time)"
-            msg_ds_arr[i][m.δx.time] = m
+            @warn "current msg time is $(t)"
+            msg_ds_arr[i][t] = m
         end
+        t += 1
     end
-    return msg_ds_arr
+    return msg_ds_arr, t
 end
-function add_to_cache!(msg_ds::Dict{𝕋,Msg}, msg::Msg) where Msg
-    t = msg.δx.time
+
+function add_to_cache!(msg_ds::Dict{𝕋,Msg}, msg::Msg, t::𝕋) where Msg
     @debug "adding to cache time: $t"
     @assert t<10 || (t>=10 && t ∉ keys(msg_ds))
     msg_ds[t] = msg
@@ -100,10 +102,10 @@ end
 """
 Add a message array with arbitrary timestep and car id to the cache
 """
-function add_vec_to_cache!(msg_ds_arr::AbstractVector{Dict{𝕋,Msg}}, msg_id:: AbstractVector{ℕ}, msg_vs::AbstractVector{Msg}) where Msg
-    for (from, msg) in zip(msg_id, msg_vs)
+function add_vec_to_cache!(msg_ds_arr::AbstractVector{Dict{𝕋,Msg}}, msg_id:: AbstractVector{ℕ}, msg_vs::AbstractVector{Msg}, t_arr::AbstractVector{𝕋}) where Msg
+    for (from, msg, t) in zip(msg_id, msg_vs, t_arr)
         @debug "recieved message from $from"
-        add_to_cache!(msg_ds_arr[from], msg)
+        add_to_cache!(msg_ds_arr[from], msg, t)
     end
 end
 
@@ -135,10 +137,10 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
     # unzip the initial states
     xs, zs, us = @unzip(MVector{N}(init_status), MVector{N}{Tuple{X,Z,U}})
     (controllers, msg_qs) = make_controllers(framework, init_status, t0) # start at time = 1 
-    msg_ds_arr::Vector{MsgCache} = create_cache_from_vec(msg_qs[car_id], convert(Int64, fleet_size))
+    t_msg::𝕋 = 1
+    msg_ds_arr::Vector{MsgCache}, send_t_msg = create_cache_from_vec(msg_qs[car_id], t_msg, convert(Int64, fleet_size))
     x, z, u = xs[car_id], zs[car_id], us[car_id]
 
-    t_msg::𝕋 = maximum( m.δx.time for m in msg_qs[1].vec[1])
     t = t0
     prev_t = t
     t_msg_offset = t0 - t_msg
@@ -149,36 +151,31 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
     # start the looping process
     fp_log = open("logs/car$(car_id).csv", "w")
     while true
-        controller_t = controllers[car_id].τ
-        
+        @warn "t msg is $t_msg, sendmsg is $send_t_msg"
+
         ms_recieved = get_vec_from_cache(msg_ds_arr, t_msg)
         @assert length(ms_recieved) == fleet_size
         # println("[$t], x: $x, z:$z, dt:$dt")
         # start controlling
         u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
-        for (i, c) in enumerate(controllers)
-            #print("[id:$i] ")
-            log_str = "[id:$i] "
-            for (k, v) in c.logs
-                log_str = log_str * "key: $k, value: $v"
-                #@debug "key: $k, value: $v"
-            end
-            #println()
-            write(fp_log, log_str)
-        end
         # limit control TODO: change to c++ 
         # u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
         # send and get state
-        ctrl_state = controllers[car_id].ideal_xz
-        @debug "[$t], state is $x, action is $u"
-        x, z, msg_recieved_pair, t_diff = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, f_state, f_obs, f_msg)
-
-        add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second)
+        ctrl_state = if typeof(controllers[car_id]) <: OvController
+            controllers[car_id].ideal_xz
+        else
+            Dict{String, Vector{Vector{X}}}("value" => fill([X(0.0, 0.0, 0.0, 0.0, 0.0)], fleet_size))
+        end
+        @warn "[$t], state is $x, action is $u"
+        x, z, msg_recieved_pair, t_diff, t_arr = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
+        
+        add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second, t_arr)
         # parse the message
         prev_t = t
         t = t + dt#𝕋(round(t_diff/freq))
         t_msg = t_msg + dt #t + t_msg_offset #+= dt
-        @debug "current msg time is $t_msg, offset is $t_msg_offset recieved msg time is $(msg_recieved_pair.second[1].δx.time) new msg time is $(ms_new[1].δx.time), $(ms_new[2].δx.time)"
+        send_t_msg += dt
+        @warn "recieved array is $t_arr"
         if preheat
             break
         end

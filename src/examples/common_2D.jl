@@ -479,32 +479,29 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         else
             @SVector[zs[id].c[1], zs[id].c[2]]
         end
+        # control ref point - project ref point to line
+        # velocity - mag = 1dTOC, dir=line dir
+
         if (id == 1)
             state = xs[id]
             # compute for distance left
-            dist_left = sqrt(square(wall_pos[1] - state.x) + square(wall_pos[2] - state.y))
+            # change to static vector
+            dist_left = sqrt((wall_pos[1] - state.x)^2 + (wall_pos[2] - state.y)^2)
             dist_left -= ctrl.K.stop_distance
             dist_left = clamp(dist_left, 0.0, ctrl.K.sensor_range)
-            if dist_left < ctrl.K.stop_dist_tol
-                dist_left = 0.0
-            end
             # compute target point
             cur_pos = @SVector[state.x, state.y]
             res = intersect_line_circle(ctrl.K.p1, ctrl.K.p2, cur_pos, ctrl.K.r)
             θ = rem2pi(state.θ, RoundNearest)
             i = 0
             while isempty(res)
-                res = intersect_line_circle(ctrl.K.p1, ctrl.K.p2, cur_pos, ctrl.K.r+1)
+                res = intersect_line_circle(ctrl.K.p1, ctrl.K.p2, cur_pos, ctrl.K.r+i)
                 i += 1
             end
-            if isempty(res)
-                # no intersection found, that indicates that too much deviation has happened
-                @error "Deviated offcourse, current position is $(cur_pos)"   
-                
-            else
-                r = res[argmin([abs(rem2pi(atan(r[2] - cur_pos[2], r[1] - cur_pos[1]) - θ, RoundNearest)) for r in res])]
-                θ = atan(r[2] - cur_pos[2], r[1] - cur_pos[1])
-            end
+            
+            r = res[argmin([abs(rem2pi(atan(r[2] - cur_pos[2], r[1] - cur_pos[1]) - θ, RoundNearest)) for r in res])]
+            θ = atan(r[2] - cur_pos[2], r[1] - cur_pos[1])
+
             #θ = clamp(θ, rem2pi(state.θ, RoundNearest) -15°, rem2pi(state.θ, RoundNearest) + 15°)
             p = rotation2D(θ)*@SVector[clamp(dist_left, 0.0, 0.1), 0] + ref_point(ctrl.K.ref_pos, state)#rotation2D(state.θ)*@SVector[clamp(dist_left, 0.0, 1.0), 0] + @SVector[state.x, state.y]
             v_p = rotation2D(θ)*@SVector[oneDTOC(dist_left, state.v), 0.0] 
