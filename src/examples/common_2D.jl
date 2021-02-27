@@ -201,7 +201,7 @@ function track_ref(
 end
 
 function track_refpoint(
-    K::WallObsControl,lξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
+    K::WallObsControl,ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
 )::CarU{R} where R
     track_refpoint(K.kp, K.ki, K.kd, K.kv, K, ξ, (p̂, v_p̂), s, t)
 end
