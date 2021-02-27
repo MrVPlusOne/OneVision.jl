@@ -163,6 +163,11 @@ end
     p2::Vector{ℝ} = [0.0, 1.0]
     "radius "
     r::ℝ = 1.0
+    "leader pid config"
+    kp_leader::ℝ=0.2
+    ki_leader::ℝ=0.05
+    kd_leader::ℝ=0.0
+    kv_leader::ℝ=1.0
 end
 
 function ref_point(ref_pos, s::CarX)
@@ -196,18 +201,24 @@ function track_ref(
 end
 
 function track_refpoint(
-    K::Union{RefPointTrackControl, WallObsControl}, ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
+    K::WallObsControl,lξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
+)::CarU{R} where R
+    track_refpoint(K.kp, K.ki, K.kd, K.kv, K, ξ, (p̂, v_p̂), s, t)
+end
+
+function track_refpoint(
+    kp::ℝ, ki::ℝ, kd::ℝ, kv::ℝ, K::Union{RefPointTrackControl, WallObsControl}, ξ::SymbolMap, (p̂, v_p̂), s::CarX{R}, t
 )::CarU{R} where R
     ξ = submap(ξ, :track_refpoint)
     p = ref_point(K, s)
     v_p = let
         Δt = K.ctrl_interval
-        ∫edt = K.ki == 0 ? zero(p̂) : K.ki * Δt * integral!(ξ, :integral, t, p̂ - p)
-        dedt = K.kd == 0 ? zero(p̂) : K.kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
-        p_ctrl = K.kp * (p̂ - p)
-        ∫edt = [(if (∫edt[i] > 0) clamp(∫edt[i], 0.0, abs(p_ctrl[i])*0.1) else  clamp(∫edt[i], -abs(p_ctrl[i])*0.1, 0.0) end) for i in 1:length(∫edt)]
-        dedt = [(if (dedt[i] > 0) clamp(dedt[i], 0.0, abs(p_ctrl[i])*0.1) else  clamp(dedt[i], -abs(p_ctrl[i])*0.1, 0.0) end) for i in 1:length(dedt)]
-        p_ctrl + ∫edt + dedt + K.kv*v_p̂ 
+        ∫edt = ki == 0 ? zero(p̂) : ki * Δt * integral!(ξ, :integral, t, p̂ - p)
+        dedt = kd == 0 ? zero(p̂) : kd / Δt * derivative!(ξ, :derivative, t, p̂ - p)
+        p_ctrl = kp * (p̂ - p)
+        ∫edt = [clamp(∫edt[i], -abs(p_ctrl[i])*0.1, abs(p_ctrl[i])*0.1) for i in 1:length(∫edt)]
+        dedt = [clamp(dedt[i], -abs(p_ctrl[i])*0.1, abs(p_ctrl[i])*0.1) for i in 1:length(dedt)]
+        p_ctrl + ∫edt + dedt + kv*v_p̂ 
     end
     #print("ref pt is $p, optimal is $p̂")
     # convert `v_p` back into the control `CarU`
@@ -225,7 +236,6 @@ function track_refpoint(
     @info "[ctrl] lin vel is $v, ang vel is $ω action is $u"
     u
 end
-
 
 @kwdef struct ConfigTrackControl <: TrackingControl
     dy::CarDynamics
@@ -510,7 +520,11 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         end
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
-        u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        u = if id ==1 
+            track_refpoint(ctrl.K.kp_leader, ctrl.K.ki_leader, ctrl.K.kd_leader, ctrl.K.kv_leader, ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        else
+            track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
+        end
         @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(wall_pos) obss are:$zs \n actions are:$u"
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u

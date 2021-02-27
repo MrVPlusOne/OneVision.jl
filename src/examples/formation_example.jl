@@ -493,7 +493,11 @@ function get_framework(
         target_v = retrieve(conf, "wall", "target_v", Float64),
         p1 = [parse(ℝ, i) for i in retrieve(conf, "wall", "p1")],
         p2 = [parse(ℝ, i) for i in retrieve(conf, "wall", "p2")],
-        r = retrieve(conf, "wall", "r", ℝ)
+        r = retrieve(conf, "wall", "r", ℝ),
+        kp_leader = retrieve(conf, "wall", "kp_leader", ℝ),
+        ki_leader = retrieve(conf, "wall", "ki_leader", ℝ),
+        kd_leader = retrieve(conf, "wall", "kd_leader", ℝ),
+        kv_leader = retrieve(conf, "wall", "kv_leader", ℝ),
         )
     else
         error("Tracking configuration not found! Current value is $track_config")
