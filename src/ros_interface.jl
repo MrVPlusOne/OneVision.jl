@@ -73,7 +73,7 @@ function create_cache_from_vec(msg_qss::FixedQueue{Each{Msg}}, start_t::𝕋, fl
         # gives a vector of msg where index = car_id
         for (i, m) in enumerate(msgs)
             # this iterates over the car
-            @warn "current msg time is $(t)"
+            @debug "current msg time is $(t)"
             msg_ds_arr[i][t] = m
         end
         t += 1
@@ -151,7 +151,7 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
     # start the looping process
     fp_log = open("logs/car$(car_id).csv", "w")
     while true
-        @warn "t msg is $t_msg, sendmsg is $send_t_msg"
+        @debug "t msg is $t_msg, sendmsg is $send_t_msg"
 
         ms_recieved = get_vec_from_cache(msg_ds_arr, t_msg)
         @assert length(ms_recieved) == fleet_size
@@ -166,7 +166,7 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         else
             Dict{String, Vector{Vector{X}}}("value" => fill([X(0.0, 0.0, 0.0, 0.0, 0.0)], fleet_size))
         end
-        @warn "[$t], state is $x, action is $u"
+        @debug "[$t], state is $x, action is $u"
         x, z, msg_recieved_pair, t_diff, t_arr = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
         
         add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second, t_arr)
@@ -175,7 +175,7 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         t = t + dt#𝕋(round(t_diff/freq))
         t_msg = t_msg + dt #t + t_msg_offset #+= dt
         send_t_msg += dt
-        @warn "recieved array is $t_arr"
+        @debug "recieved array is $t_arr"
         if preheat
             break
         end
