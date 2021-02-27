@@ -229,7 +229,7 @@ function track_refpoint(
     (v < 0) && (ω *= -1)
     u = u_from_v_ω(v, ω, K.dy)
     # bound steering based on state
-    ψ_min, ψ_max = s.ψ-10°, s.ψ+10°
+    ψ_min, ψ_max = s.ψ-2°, s.ψ+2°
     ψ = clamp(u.ψ̂, ψ_min, ψ_max)
     u = CarU(u.v̂, ψ)
     @info "ideal ref point is $p̂, ref point is $p"
