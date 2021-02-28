@@ -88,11 +88,6 @@ function avg_formation_deviation(
             |> map(_.pos, __))
         x_data = data["x"][t, :]
         y_data = data["y"][t, :]
-        total = 0.0
-        for i in 2:N
-            pos = @SVector[x_data[i], y_data[i]]
-            norm(pos - ref_pos[i-1])
-        end
         actual_pos = [@SVector[x_data[i], y_data[i]] for i in 2:N]
         mean(norm.(actual_pos .- ref_pos))
     end

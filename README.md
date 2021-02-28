@@ -1,20 +1,7 @@
-# OneVision
+# OneVision: Centralized  to  Distributed  Controller  Synthesis
 
-## Installation
 
-### Download and install Julia
-#### Linux ARM
-```wget https://julialang-s3.julialang.org/bin/linux/aarch64/1.5/julia-1.5.3-linux-aarch64.tar.gz
-tar zxvf julia-1.5.3-linux-aarch64.tar.gz
-mv julia-788b2c77c1/ julia-153
-sudo mv julia-153 /opt/
-```
-
-and then add the linking to user profile:
-```
-export PATH="$PATH:/opt/julia-153/bin"
-```
-### Reproduce
+## Reproduce
 This code base is using the Julia Language and [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/)
 to make a reproducible scientific project named
 > OneVision
@@ -35,14 +22,8 @@ To (locally) reproduce this project, do the following:
 This will install all necessary packages for you to be able to run the scripts and
 everything should work out of the box.
 
-### Instal necessary dependencies
-#### arm modification (jetson tx2 specific)
-Due to package compatibiliies, some package will have to be installed in an alternative manner. Note that the following are only validated on Jetson TX2 with 18.04 - your milage may vary. 
 
-
-#### Installation
-
-#### Generate System Image
+### Generate System Image
 This step can significantly reduce Julia compilation time.
 
 To generate a system image, from command line, run
@@ -54,15 +35,17 @@ It will take several minutes for this step to complete, after which a system ima
 julia --sysimage <path to image>
 ```
 
-# Quickstart
-## Convension
+## Usages
+Full Documentation coming soon.
+
+### Convension
 In correspondance to the paper, without further context the following references applies:
 - X: robot state
 - Z: robot observation
 - U: robot actuation
 
 
-## Usage
+### Programming Interface (Outdated)
 The main framework depends on the control! function, which has the following signature:
 ```julia
 function OneVision.control!(
