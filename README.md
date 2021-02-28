@@ -6,7 +6,7 @@ This code base is using the Julia Language and [DrWatson](https://juliadynamics.
 to make a reproducible scientific project named
 > OneVision
 
-It is authored by Jiayi Wei, Tongrui Li.
+It is authored by Jiayi Wei, Tongrui Li, Swarat Chaudhuri, Isil Dillig, and Joydeep Biswas.
 
 To (locally) reproduce this project, do the following:
 
@@ -35,8 +35,11 @@ It will take several minutes for this step to complete, after which a system ima
 julia --sysimage <path to image>
 ```
 
+## Results
+Full simulation results can be found [here](papers/SimulationResults.md).
+
 ## Usages
-Full Documentation coming soon.
+*Documentation coming soon.*
 
 ### Convension
 In correspondance to the paper, without further context the following references applies:
