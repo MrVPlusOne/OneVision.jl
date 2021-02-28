@@ -390,9 +390,9 @@ function get_framework(
 
     X, U = CarX{ℝ}, CarU{ℝ}
     Z, init_z = if(track_config == "wall_obs")
-        HVec{Tuple{ℝ, ℝ}, ℕ}, ()->Z((Inf, Inf), 1) # stop distance, formation
+        HVec{Tuple{ℝ, ℝ}, ℕ}, ()->Z((Inf, Inf), retrieve(conf, "formation", "default_formation_id", Int64)) # stop distance, formation
     else
-        HVec{U, ℕ}, ()->Z(U(0.0, 0.0), 1)# action, formation
+        HVec{U, ℕ}, ()->Z(U(0.0, 0.0), retrieve(conf, "formation", "default_formation_id", Int64))# action, formation
     end
     delta_t = 1.0 / freq
 
