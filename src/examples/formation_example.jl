@@ -530,7 +530,7 @@ function get_framework(
     end
     framework = mk_cf(CF, world_model, central, delays, loss_model, FuncT(f_log, Tuple{ℕ,𝕋,X,Z}, Bool); X, Z, H)
 
-    @debug "init status is $init"
+    @info "init status is $init"
     #exit(0)
     return framework,  init, X, Z, U, track_config
 end
