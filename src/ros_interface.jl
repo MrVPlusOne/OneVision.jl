@@ -34,7 +34,8 @@ function send_and_get_states(conn, x_old::X, u_old::U, z_old::Z, msgs::Each{Msg}
     msgs::Pair{Each{ℕ}, Each{Msg}} = f_msg(result_dict, Msg)
     t_arr::Vector{𝕋} = result_dict["t_arr"]
     t::Float64 = result_dict["time"]
-    return x, z, msgs, t, t_arr
+    should_terminate::Bool = result_dict["should_terminate"]
+    return x, z, msgs, t, t_arr, should_terminate
 
     """
     # state: StaticArrays.MArray{Tuple{2},OneVision.Examples.Car1DExample.CarX{Float64},1,2}
@@ -161,13 +162,16 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         # limit control TODO: change to c++ 
         # u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
         # send and get state
+        # @info controllers[car_id].logs[controllers[car_id].τ-1]
         ctrl_state = if typeof(controllers[car_id]) <: OvController
             controllers[car_id].ideal_xz
         else
             Dict{String, Vector{Vector{X}}}("value" => fill([X(0.0, 0.0, 0.0, 0.0, 0.0)], fleet_size))
         end
+        
+
         @debug "[$t], state is $x, action is $u"
-        x, z, msg_recieved_pair, t_diff, t_arr = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
+        x, z, msg_recieved_pair, t_diff, t_arr, should_terminate = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
         
         add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second, t_arr)
         # parse the message
@@ -177,6 +181,16 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
         send_t_msg += dt
         @debug "recieved array is $t_arr"
         if preheat
+            close(conn)
+            break
+        end
+        # terminate 
+        if should_terminate
+            close(conn)
+            open(pwd()*"/log/trajectory$car_id.json", "w") do io
+                JSON.print(io, controllers[car_id].logs)
+            end
+            @info "Terminating OneVision"
             break
         end
     end
@@ -186,6 +200,5 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
     # initialize the controller framework
     # framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
     # stops stuff
-    close(conn)
 
 end

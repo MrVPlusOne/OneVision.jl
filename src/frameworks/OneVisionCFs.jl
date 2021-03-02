@@ -26,6 +26,10 @@ function to_array(m::MMatrix{n1,n2,T}) where {n1,n2,T}
     copyto!(r, m)
 end
 
+function to_array(m::SizedMatrix{n1,n2,T}) where {n1,n2,T}
+    convert(Array{T}, m)
+end
+
 """
 The OneVision Controller Framework.
 """
@@ -145,7 +149,8 @@ function OneVision.control!(
     @unpack Tx, Tu, Tc, Ta = short_delay_names(π.cf.delay_model)
     zt = Timed(τ-Tx, z)
     xt = Timed(τ-Tx, x)
-
+    x_cur = x
+    z_cur = z
     δx = x - π.pred_x[τ-Tx] |> attime(τ-Tx-1)   # δx: t = τ-Tx-1
     pushpop!(π.self_δx, δx)     # π.self_δx: t ∈ [τ-Tx-1-Tc, τ-Tx-1]
     pushpop!(π.self_z, zt)       # π.self_z: t ∈ [τ-Tx-Tc, τ-Tx]
@@ -189,7 +194,6 @@ function OneVision.control!(
             u_path = SVector{H * ΔT}(ũ[1 + ΔT + Ta : end, id])  # [τ+Tu:τ+Tu+HΔT-1]
             plan_trajectory(π.plan_prob, x_self[τ+Tu], x_path, u_path, τ+Tu)
         end
-        
         π.u_last = u_plan[1]
     end
     u = π.u_last
@@ -202,7 +206,7 @@ function OneVision.control!(
     end
 
     if should_log 
-        π.logs[τ - Tx - Tc] = OvLog(to_array.((ũ, x̃, z̃))..., δx, zt)
+        π.logs[π.τ] = OvLog(to_array.((ũ, x̃, z̃))..., x_cur, z_cur)
     end
 
     π.τ += 1

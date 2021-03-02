@@ -234,7 +234,8 @@ module NumericalIntegration
     @inline function integrate_forward_invariant(f, x0::X, dt::AbstractFloat, method, N) where {X}
         x::X = x0
         for _ in 1:N
-            x += method(f, x, dt)
+            x_dir = method(f, x, dt)
+            x += x_dir
         end
         x
     end

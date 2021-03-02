@@ -329,7 +329,7 @@ function run_open_example(car_id::Integer, fleet_size::Integer, freq::Int32, pre
     end
 
     function parse_obs(result::Dict{String, Any}) 
-        @info result
+        @debug result
         z = 
         if track_config == "wall_obs"
             Z((result["z"]["c"][1], result["z"]["c"][2]), result["z"]["d"])
@@ -428,7 +428,7 @@ function get_framework(
             push!(init,  (X(x, y, θ, v, s), init_z(), U(0.0, 0.0)))
         end;
     end
-    @info "init status read"
+    @debug "init status read"
     triangle_sep::Float64 = retrieve(conf, "formation", "triangle_sep", Float64)
     vertical_sep::Float64 = retrieve(conf, "formation", "vertical_sep", Float64)
     horizental_sep::Float64 = retrieve(conf, "formation", "horizental_sep", Float64)
@@ -523,9 +523,14 @@ function get_framework(
         RegretLossModel(central, world_model, x_weights, u_weights)
     end
 
-    framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
 
-    @info "init status is $init"
+    # logging function
+    function f_log(x::Tuple{ℕ,𝕋,X,Z})::Bool where {X,Z}
+        true
+    end
+    framework = mk_cf(CF, world_model, central, delays, loss_model, FuncT(f_log, Tuple{ℕ,𝕋,X,Z}, Bool); X, Z, H)
+
+    @debug "init status is $init"
     #exit(0)
     return framework,  init, X, Z, U, track_config
 end

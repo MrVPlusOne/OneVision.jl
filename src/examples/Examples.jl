@@ -12,7 +12,7 @@ default_delays = DelayModel(obs = 2, act = 2, com = 10, ΔT = 1)
 
 @inline function mk_cf(
     name, world_model::WorldDynamics{N}, central, delays, 
-    loss_model; X, Z, H
+    loss_model, f_log; X, Z, H
 ) where N
     if name == naive_cf
         NaiveCF(X, Z, N, central, msg_queue_length(delays), delays.ΔT)
@@ -21,7 +21,7 @@ default_delays = DelayModel(obs = 2, act = 2, com = 10, ΔT = 1)
     elseif name == const_u_cf
         LocalCF(central, world_model, delays; X, Z, conpensate_comm = true)
     elseif name == onevision_cf
-        OvCF(loss_model, delays; Z, H)
+        OvCF(loss_model, delays; Z, H, save_log=f_log)
     else
         error("Unexpected CF name: $name")
     end

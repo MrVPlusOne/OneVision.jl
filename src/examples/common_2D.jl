@@ -82,6 +82,7 @@ end
 @inline function sys_derivates(dy::CarDynamics, x::X, u)::X where X
     x, y, θ, v, ψ = x
     v̂, ψ̂ = u
+    dt = dy.delta_t
     #v = restrict(v)
     ψ̂ = restrict(ψ̂ )
     θ = restrict(θ)
@@ -89,19 +90,25 @@ end
     ẋ = cos(θ) * v
     ẏ = sin(θ) * v
     θ̇ = ω_from_v_ψ(v, ψ, dy.l)
-    v̇ = dy.k_v * (v̂ - v)
+    v̇ = dy.k_v * (v̂ - v) 
     ψ_dir = dy.k_ψ * restrict(ψ̂ - ψ)
     
     # bounds the variables
     N = dy.integrator_samples
-    v̇_min, v̂_max = -dy.k_max_a/N, dy.k_max_a/N#v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
-    v̇ = clamp(v̇, v̇_min, v̂_max)
-    if v == 0 && v̇ < 0.15 
+    v_dir_min, v_dir_max = -dy.k_max_a, dy.k_max_a#v*(1.0+dy.k_max_v/N), v*(1.0-dy.k_max_v/N)
+    v̇ = clamp(v̇, v_dir_min, v_dir_max)
+    if v == 0 && abs(v̇) < 3.0
         v̇ = 0.0
     end
-    ψ_dir_min, ψ_dir_max= -dy.k_max_ω/N, dy.k_max_ω/N#ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
+    ψ_dir_min, ψ_dir_max= -dy.k_max_ω, dy.k_max_ω#ψ*(1.0+dy.k_max_ψ/N), ψ*(1.0-dy.k_max_ψ/N)
     ψ_dir = clamp(ψ_dir, ψ_dir_min, ψ_dir_max)
-    X(ẋ, ẏ, θ̇, v̇, ψ_dir)
+    
+    res = X(ẋ, ẏ, θ̇, v̇, ψ_dir)
+    
+    #if typeof(res) <: CarX{Float64}
+    #    @info "State=$x\naction=$u\ndir is $res\n v:$v v_target:$v̂ v_dot:$v̇"
+    #end
+    res
 end
 
 function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
@@ -110,7 +117,8 @@ function OneVision.sys_forward(dy::CarDynamics, x::X, u, t::𝕋)::X where X
     @inline f(x) = sys_derivates(dy, x, u)
 
     x′ = integrate_forward_invariant(f, x, dt, RK38, N)
-    dy.add_noise(x′,t)
+    #dy.add_noise(x′,t)
+    x′
 end
 
 """
@@ -171,7 +179,7 @@ end
 end
 
 function ref_point(ref_pos, s::CarX)
-    @info "ref pos is $ref_pos, type is $(typeof(ref_pos))"
+    @debug "ref pos is $ref_pos, type is $(typeof(ref_pos))"
     x = s.x + ref_pos * cos(s.θ)
     y = s.y + ref_pos * sin(s.θ)
     @SVector[x, y]
@@ -232,8 +240,8 @@ function track_refpoint(
     ψ_min, ψ_max = s.ψ-2°, s.ψ+2°
     ψ = clamp(u.ψ̂, ψ_min, ψ_max)
     u = CarU(u.v̂, ψ)
-    @info "ideal ref point is $p̂, ref point is $p"
-    @info "[ctrl] lin vel is $v, ang vel is $ω action is $u"
+    @debug "ideal ref point is $p̂, ref point is $p"
+    @debug "[ctrl] lin vel is $v, ang vel is $ω action is $u"
     u
 end
 
@@ -468,7 +476,7 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         else
             s = speed - max_a*dt
         end
-        @info "dist left is $dist_left s is $s, speed is $speed"
+        @debug "dist left is $dist_left s is $s, speed is $speed"
         if abs(speed) <  0.01 && (sign(s)==1 && s > speed || sign(s)==-1 && s < speed)
             s = 0.2*sign(s)
         end
@@ -478,7 +486,9 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
     function action(id)::CarU
         #return CarU(0.0, 0.0)
         #xs[id].θ = restrict(xs[id].θ)
-        @info "in action, obs are $zs"
+        if t <= 100
+            return CarU(0.0, 0.0)
+        end
         s = form[id] # initial state
         (p, v_p) = formpoint_to_refpoint(@SVector[s.x, s.y]) # 
         ξi = submap(ξ, Symbol(id))
@@ -496,7 +506,11 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
             state = xs[id]
             # compute for distance left
             # change to static vector
-            dist_left = sqrt((wall_pos[1] - state.x)^2 + (wall_pos[2] - state.y)^2)
+            dist_left = if zs[id].c[1] == Inf || zs[id].c[2] == Inf
+                ctrl.K.sensor_range
+            else
+                sqrt((wall_pos[1] - state.x)^2 + (wall_pos[2] - state.y)^2)
+            end
             dist_left -= ctrl.K.stop_distance
             dist_left = clamp(dist_left, 0.0, ctrl.K.sensor_range)
             # compute target point
@@ -516,7 +530,7 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
             p = rotation2D(θ)*@SVector[clamp(dist_left, 0.0, 0.1), 0] + ref_point(ctrl.K.ref_pos, state)#rotation2D(state.θ)*@SVector[clamp(dist_left, 0.0, 1.0), 0] + @SVector[state.x, state.y]
             v_p = rotation2D(θ)*@SVector[oneDTOC(dist_left, state.v), 0.0] 
             v_o = @SVector[0.0, 0.0]
-            @info "theta is $θ, dist_left is $dist_left, vel is $(oneDTOC(dist_left, state.v)) intersection is $res"
+            @debug "theta is $θ, dist_left is $dist_left, vel is $(oneDTOC(dist_left, state.v)) intersection is $res"
         end
         #println("s:$s p:$p vp:$v_p ξi:$ξi, v_o:$v_o, K $(ctrl.K)")
         #u = track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
@@ -525,7 +539,7 @@ function formation_controller(ctrl::FormationControl{WallObsControl}, ξ, xs, zs
         else
             track_refpoint(ctrl.K, ξi, (p, v_p + v_o), xs[id], t)
         end
-        @info "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(wall_pos) obss are:$zs \n actions are:$u"
+        @debug "[$t] states are $xs\n refpt is $p refvel is $v_p \n wall pos is $(wall_pos) obss are:$zs \n actions are:$u"
         #println("t$t id$id u: $u s:$s xs:$(xs) p:$p vp:$v_p ")
         return u
     end

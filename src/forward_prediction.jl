@@ -54,7 +54,9 @@ function forward_predict!(
         us = control_all(prob.π, s_c, xs, zs, τ0 + t - 1, SOneTo(N))
         us = limit_control.(x_dy, us, xs, τ0 + t - 1)
         @inbounds for i in 1:N
-            xs[i] = sys_forward(x_dy[i], xs[i], us[i], N) + prob.δx[t, i]
+            s = sys_forward(x_dy[i], xs[i], us[i], N)
+            p = prob.δx[t, i]
+            xs[i] = s + p
             z = prob.z_obs[t, i]
             zs[i] = (z === missing) ? obs_forward(z_dy[i], xs[i], zs[i], N) : z
         end
