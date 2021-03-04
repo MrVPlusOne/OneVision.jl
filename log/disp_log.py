@@ -7,7 +7,7 @@ fleet_size=3
 fn_list = ["trajectory{}.json".format(i) for i in range(1, fleet_size+1)]
 X, U, Z = "x̃", "ũ", "z̃"
 n_list = [0, 1] #list(range(fleet_size))
-Tx,Tu,Tc = 3, 17, 50
+Tx,Tu,Tc = 3, 18, 5
 T_ctrl = 1
 offset=0
 def get_file():
