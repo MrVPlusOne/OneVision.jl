@@ -525,8 +525,14 @@ function get_framework(
 
 
     # logging function
+
+    log_interval = retrieve(conf, "log", "log_interval", Int64)
     function f_log(x::Tuple{ℕ,𝕋,X,Z})::Bool where {X,Z}
-        true
+        if log_interval == 0
+            return false
+        else
+            return x[2]%log_interval == 0
+        end
     end
     framework = mk_cf(CF, world_model, central, delays, loss_model, FuncT(f_log, Tuple{ℕ,𝕋,X,Z}, Bool); X, Z, H)
 

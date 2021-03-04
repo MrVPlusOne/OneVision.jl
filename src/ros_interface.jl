@@ -150,55 +150,41 @@ function start_framework(framework::ControllerFramework{X,Z,U,Msg,Log},
     conn = init_socket(port_number)
     #println("origional msg queue is $(msg_qs)\n\n current msg cache is $(msg_ds_arr)")
     # start the looping process
-    fp_log = open("logs/car$(car_id).csv", "w")
-    while true
-        @debug "t msg is $t_msg, sendmsg is $send_t_msg"
 
-        ms_recieved = get_vec_from_cache(msg_ds_arr, t_msg)
-        @assert length(ms_recieved) == fleet_size
-        # println("[$t], x: $x, z:$z, dt:$dt")
-        # start controlling
-        u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
-        # limit control TODO: change to c++ 
-        # u = limit_control(world_dynamics.dynamics[car_id], u, x, t)
-        # send and get state
-        # @info controllers[car_id].logs[controllers[car_id].τ-1]
-        ctrl_state = if typeof(controllers[car_id]) <: OvController
-            controllers[car_id].ideal_xz
-        else
-            Dict{String, Vector{Vector{X}}}("value" => fill([X(0.0, 0.0, 0.0, 0.0, 0.0)], fleet_size))
-        end
-        
+    try
+        while true
+            ms_recieved = get_vec_from_cache(msg_ds_arr, t_msg)
+            @assert length(ms_recieved) == fleet_size
+            # println("[$t], x: $x, z:$z, dt:$dt")
+            # start controlling
+            u, ms_new = control!(controllers[car_id], x, z, ms_recieved)
 
-        @debug "[$t], state is $x, action is $u"
-        x, z, msg_recieved_pair, t_diff, t_arr, should_terminate = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
-        
-        add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second, t_arr)
-        # parse the message
-        prev_t = t
-        t = t + dt#𝕋(round(t_diff/freq))
-        t_msg = t_msg + dt #t + t_msg_offset #+= dt
-        send_t_msg += dt
-        @debug "recieved array is $t_arr"
-        if preheat
-            close(conn)
-            break
-        end
-        # terminate 
-        if should_terminate
-            close(conn)
-            open(pwd()*"/log/trajectory$car_id.json", "w") do io
-                JSON.print(io, controllers[car_id].logs)
+            ctrl_state = if typeof(controllers[car_id]) <: OvController
+                controllers[car_id].ideal_xz
+            else
+                Dict{String, Vector{Vector{X}}}("value" => fill([X(0.0, 0.0, 0.0, 0.0, 0.0)], fleet_size))
             end
-            @info "Terminating OneVision"
-            break
+
+            x, z, msg_recieved_pair, t_diff, t_arr, should_terminate = send_and_get_states(conn, x, u, z, ms_new, ctrl_state, t, send_t_msg, f_state, f_obs, f_msg)
+            add_vec_to_cache!(msg_ds_arr, msg_recieved_pair.first, msg_recieved_pair.second, t_arr)
+            # parse the message
+            prev_t = t
+            t = t + dt#𝕋(round(t_diff/freq))
+            t_msg += + dt #t + t_msg_offset #+= dt
+            send_t_msg += dt
+            if preheat
+                break
+            end
+            if should_terminate
+                break
+            end
         end
+    finally
+        close(conn)
+        open(pwd()*"/log/trajectory$car_id.json", "w") do io
+            JSON.print(io, controllers[car_id].logs)
+        end
+        @info "OneVision Terminated!"
     end
-
-    
-
-    # initialize the controller framework
-    # framework = mk_cf(CF, world_model, central, delays, loss_model; X, Z, H)
-    # stops stuff
 
 end
