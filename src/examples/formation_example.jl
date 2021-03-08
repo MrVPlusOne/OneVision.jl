@@ -452,9 +452,6 @@ function get_framework(
     vertical_formation = let
         l = vertical_sep
         line = [X(x = -l * (i-1), y = 0.0, θ = 0.0) for i in 1:N]
-        if N == 3
-            line = [X(x = l * i, y = 0.0, θ = 0.0) for i in [0, -1, 1]]
-        end
         """
         l = vertical_sep
         leader_idx = round_ceil(N/2)
