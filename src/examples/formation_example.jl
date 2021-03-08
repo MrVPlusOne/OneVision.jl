@@ -502,7 +502,10 @@ function get_framework(
         error("Tracking configuration not found! Current value is $track_config")
         exit(0)
     end
-    avoidance = CollisionAvoidance(scale=1.0, min_r=dy_model.l*1.2, max_r=1.5*dy_model.l)
+    avoidance = CollisionAvoidance(
+        scale=retrieve(conf, "avoidance", "scale", ℝ), 
+        min_r=retrieve(conf, "avoidance", "min_r", ℝ), 
+        max_r=retrieve(conf, "avoidance", "max_r", ℝ))
     central = FormationControl((_, zs, _) -> form_from_id(zs[1].d),
         RefK, dy_model, avoidance)
 
