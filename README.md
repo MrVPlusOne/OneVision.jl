@@ -35,14 +35,15 @@ julia scripts/precompile/generate_img.jl
 ```
 It will take several minutes for this step to complete, after which a system image called "JuliaSysimage.dylib" will be created under the project root. To use this image, run all Julia commands with an additional `sysimage` flag like below
 ```
-julia --sysimage <path to image>
+julia --sysimage <path to image> <julia script>
 ```
 
 ## Results
 Full simulation results can be found [here](papers/SimulationResults.md).
 
 ## Usages
-*Documentation coming soon.*
+To reproduce our simulation results, simply run the Julia script at `scripts/run_experiments.jl`.
+You can also play with the interactive demo by running `scripts/runner.jl`.
 
 
 
